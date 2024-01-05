@@ -29,6 +29,7 @@ my_gps = MicropyGPS()
 i2c = I2C(1)
 si7021 = SI7021(i2c)
 i2cmpl = machine.I2C(1, scl = machine.Pin(7), sda = machine.Pin(6))
+rain_drop_sensor = machine.ADC(28)
 
 #lenght bytes
 frame = bytearray(20)
@@ -69,7 +70,8 @@ def bucket_tipped():
 def spin():                                      
     global wind_count
     wind_count += 1
-    
+
+#speed wind
 def calculate_speed(time_sec):
     global wind_count
     circunferencia_cm = (2 * math.pi) * radius_cm
@@ -78,8 +80,6 @@ def calculate_speed(time_sec):
     kmpersec = dist_km / time_sec
     kmperhour = kmpersec * SecsInAnHour
     return kmperhour * Adjustment
-speed = Button(9)
-speed.when_activated = spin
 
 def get_historicals():
     try:
@@ -220,6 +220,12 @@ while True:
         if lower <= wind <= upper:
             dir_wind = direction
             break
+    rain_drop = rain_drop_sensor.read_u16()
+    print(rain_drop)
+
+    if rain_drop >= 60001:
+        count = 0
+    #elif rain_drop <= 60000:
         
     #rain sensor
     rain_sensor = Button(8)
@@ -229,7 +235,7 @@ while True:
     str_pRain = str_rain + 'mm/'
     rain_data = (int(rain*100))
     rain_bytes = ustruct.pack('H', rain_data)
-    #print(str_pRain)
+    print(str_pRain)
         
     #Speed Wind sensor Start       
     wind_count = 0
@@ -422,6 +428,3 @@ while True:
     
         
     utime.sleep(0.5)
-    
-    
-    
