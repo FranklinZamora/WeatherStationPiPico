@@ -9,7 +9,7 @@ from micropyGPS import MicropyGPS
 import time, machine
 
 uart = machine.UART(1, 115200)
-my_gps = MicropyGPS(-7)
+my_gps = MicropyGPS()
 
 #Wind speed and Bucket size
 wind_count = 0
@@ -32,34 +32,39 @@ i2cmpl = machine.I2C(1, scl = machine.Pin(7), sda = machine.Pin(6))
 rain_drop_sensor = machine.ADC(28)
 
 #lenght bytes
-frame = bytearray(20)
+frame = bytearray(26)
 
 
 def GPS():
     sentence = uart.readline()
     if sentence:
-        for x in sentence:
-            my_gps.update(chr(x))
+        for char in sentence.decode('utf-8'):  # Assuming GPS data is in utf-8 encoding
+            my_gps.update(char)
 
-    # Obtener la hora, minutos y segundos correctamente
-    horas, minutos, segundos = my_gps.timestamp
-    segundos = round(segundos)
-    
-    # Obtener la fecha correctamente
-    ano, mes, dia = my_gps.date
+        # Obtener la hora, minutos y segundos correctamente
+        horas, minutos, segundos = my_gps.timestamp
+        segundos = round(segundos)
 
-    # Imprimir la hora formateada
-    timeUTC = '{:02d}:{:02d}:{:02d}'.format(horas, minutos, segundos)
-    dateNew = '{:04d}-{:02d}-{:02d}'.format(ano, mes, dia)
+        # Obtener la fecha correctamente
+        ano, mes, dia = my_gps.date
+
+        # Imprimir la hora formateada
+        timeUTC = '{:02d}:{:02d}:{:02d}'.format(horas, minutos, segundos)
+        dateNew = '{:04d}-{:02d}-{:02d}'.format(dia, mes, ano)
+
+#         # Datos crudos del GPS
+#         print("Date: " + dateNew + " " + timeUTC)
+#         print("Satelites: " + str(my_gps.satellites_in_use))
+#         print(str(my_gps.date))
+#         print(sentence.decode('utf-8'))  # Print decoded GPS data
+#         print("---------------------------------------------------------")
+#         time.sleep(1)
+        
+        #no disponible 0005:01:80:18:23:32
+        
+        return dia, mes, ano , horas, minutos, segundos
+    return 0,0,0,0,0,0
     
-    #datos crudo del GPS
-#     print("Date: " + dateNew + " " + timeUTC)
-#     print("Satelites: " + str(my_gps.satellites_in_use))
-#     print (str(my_gps.date))
-#     print(uart.read())
-#     print("---------------------------------------------------------")
-    time.sleep(1)
-    return horas, minutos, segundos
 
 #Metod Rain
 def bucket_tipped():                             
@@ -70,8 +75,7 @@ def bucket_tipped():
 def spin():                                      
     global wind_count
     wind_count += 1
-
-#speed wind
+    
 def calculate_speed(time_sec):
     global wind_count
     circunferencia_cm = (2 * math.pi) * radius_cm
@@ -80,6 +84,9 @@ def calculate_speed(time_sec):
     kmpersec = dist_km / time_sec
     kmperhour = kmpersec * SecsInAnHour
     return kmperhour * Adjustment
+
+# speed = Button(9) #
+# speed.when_activated = spin
 
 def get_historicals():
     try:
@@ -113,7 +120,6 @@ def get_historicals():
             "Tiempo Minimo luz": 0,
             "Tiempo Minimo lluvia": 0,
             "Tiempo Minimo viento": 0
-            
         }
 
         # Guarda el diccionario inicial en el archivo
@@ -173,21 +179,42 @@ def Change_historical(Sensor_name,Sensor_data,Sensor_time,time):
     except (OSError, SyntaxError):
         # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
         historical = {}
-
+        
+    
+    #inicializacion variables de la flash
 (
     Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
     Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
     Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
     Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed
  ) = get_historicals()
+time.sleep(3)
 
 while True:
-    
-    
     GPS()
-    hora,minutos,segundos =  GPS()
+    ano, mes, dia , hora,minutos,segundos =  GPS()
     timeUTC = '{:02d}:{:02d}:{:02d}'.format(hora, minutos, segundos)
+    time_date = ' {:02d}/{:02d}/{:02d}'.format(dia, mes, ano)
+    
+    hora_,minuto_,segundo_ = map(int, timeUTC.split(':'))
+    tiempo_bytes = ustruct.pack('BBB', hora_, minuto_, segundo_)
+    byte_hora, byte_minuto, byte_segundo = ustruct.unpack('BBB', tiempo_bytes)
+    
+    dia_,mes_,ano_ = map(int, time_date.split('/'))
+    fecha_bytes = ustruct.pack('BBB', dia_, mes_, ano_)
+    byte_dia, byte_mes, byte_ano = ustruct.unpack('BBB', fecha_bytes)
+    
+    
+    if ano == 80 or ano==0:
+        print("sin fecha")
+        
+#     
+#     hora_, minuto, segundo = map(int, Time_Min_ligth.split(':'))
+#     tiempo_bytes = ustruct.pack('BBB', hora_, minuto, segundo)
+#     byte_hora, byte_minuto, byte_segundo = ustruct.unpack('BBB', tiempo_bytes)
+    #print(hex(byte_hora) + hex(byte_minuto) + hex(byte_segundo))
     #print("mi hora",hora , "min" , minutos , "segundos",segundos)
+    
     
     #Wind direccion
     wind_dir = machine.ADC(27)
@@ -221,7 +248,7 @@ while True:
             dir_wind = direction
             break
     rain_drop = rain_drop_sensor.read_u16()
-    print(rain_drop)
+    #print(rain_drop)
 
     if rain_drop >= 60001:
         count = 0
@@ -235,7 +262,7 @@ while True:
     str_pRain = str_rain + 'mm/'
     rain_data = (int(rain*100))
     rain_bytes = ustruct.pack('H', rain_data)
-    print(str_pRain)
+    #print(str_pRain)
         
     #Speed Wind sensor Start       
     wind_count = 0
@@ -243,13 +270,12 @@ while True:
     spdCstr = str(calculate_speed(wind_interval))
     speedC = spdCstr + 'Kmh/'
     speedReal = calculate_speed(wind_interval)
-   # print(speedReal)
     SpeedReal_ = (int(speedReal*100))
     Speed_bytes = ustruct.pack('H', SpeedReal_)
     
     #Altura
     mpl = MPL3115A2(i2cmpl, mode=MPL3115A2.ALTITUDE) 
-    alt = int((mpl.altitude() * -1) * 100)
+    alt = int((mpl.altitude() * -1) * 100) # h = (((101326 / sensor_pres) ** (1/5.257)) - 1) * 44330.8
     altBytes = ustruct.pack('H', alt)
     #print("Altura", alt)
         
@@ -283,14 +309,20 @@ while True:
     pressure =  int((sensor_pres)*100)
     pressureBytes = ustruct.pack('I',pressure)
     
-    
     #Speed Wind sensor Start
-    
     wind_count = 0
     time.sleep(wind_interval)
     spdCstr = str(calculate_speed(wind_interval))
     speedC = spdCstr + 'Kmh/'
     
+    #bytes date
+#     byte_ano = ustruct.pack('H', ano)
+#     byte_mes = ustruct.pack('H', mes)
+#     byte_dia = ustruct.pack('H', dia)
+#     byte_hora = ustruct.pack('H', hora)
+#     byte_minutos = ustruct.pack('H',minutos)
+#     byte_segundos = ustruct.pack('H',segundos)
+#     
 #     print("Longitud de pressureBytes:", len(pressureBytes))
     
     #frames HEX message 
@@ -314,12 +346,19 @@ while True:
     frame[17] = altBytes[0]
     frame[18] = rain_bytes[1]
     frame[19] = rain_bytes[0]
+    frame[20] = byte_hora
+    frame[21] = byte_minuto
+    frame[22] = byte_segundo
+    frame[23] = byte_dia
+    frame[24] = byte_mes
+    frame[25] = byte_ano
     
   
     
     #Show message
-#     for i in range(0,18):
-#         print(hex(frame[i]), end = ' ')
+    for i in range(0,26):
+        print(hex(frame[i]), end = ' ')
+    print(timeUTC + time_date)
 #         
 #     print('\n')
 #     print("Presion Barometrica", sensor_pres)
@@ -328,8 +367,8 @@ while True:
 #     #Historicals MAX
     if temperature > Max_temp:      
         Change_historical("Maximo temperatura", temperature,"Tiempo Maximo temperatura",timeUTC)
-        print("New historical:", temperature)
-        historicals = get_historicals()
+#         print("New historical:", temperature)
+#         historicals = get_historicals()
 #         Max_temp = historicals[0]
 #         Time_Max_temp = historicals[12]
 #         print("max temp" , Max_temp )
@@ -337,7 +376,7 @@ while True:
         
     if humidity > Max_Hum:
         Change_historical("Maximo humedad" , humidity ,"Tiempo Maximo humedad", timeUTC )
-        historicals = get_historicals()
+#         historicals = get_historicals()
 #         Max_Hum = historicals[1]
 #         Time_Max_Hum = historicals[13]
 #         print("max hum" , Max_Hum )
@@ -345,8 +384,8 @@ while True:
         
     if pressure > Max_pressure:
         Change_historical("Maximo presion" , pressure,"Tiempo Maximo presion",timeUTC)
-        print("New historical:", pressure)
-        historicals = get_historicals()
+#         print("New historical:", pressure)
+#         historicals = get_historicals()
 #         Max_pressure = historicals[2]
 #         Time_Max_pressure = historicals[14]
 #         print("max Max_pressure" , Max_pressure )
@@ -354,7 +393,7 @@ while True:
                
     if lum > Max_ligth:
         Change_historical("Maximo luz", lum,"Tiempo Maximo luz",timeUTC)
-        historicals = get_historicals()
+#         historicals = get_historicals()
 #         Max_ligth = historicals[3]
 #         Time_Max_ligth = historicals[15]
 #         print("max lux" , Max_ligth )
@@ -362,15 +401,14 @@ while True:
      
     if rain_data > Max_rain:
         Change_historical("Maximo lluvia", rain_data, "Tiempo Maximo lluvia",timeUTC)
-        historicals = get_historicals()
+# #         historicals = get_historicals()
 #         Max_rain = historicals[4]
 #         Time_Max_rain = historicals[16]
 #         print("max Max_rain" , Max_rain )
 #         print("TIME max Time_Max_rain" , Time_Max_rain )
          
     if SpeedReal_ > Max_Speed:
-        Change_historical("Maximo viento", SpeedReal_,"Tiempo Maximo viento",timeUTC)
-        
+        Change_historical("Maximo viento", SpeedReal_,"Tiempo Maximo viento",timeUTC)        
 #         Max_Speed = historicals[5]
 #         Time_Max_Speed = historicals[17]
 #         print("max Max_Speed" , Max_Speed )
@@ -379,52 +417,58 @@ while True:
     #Historicals MIN
     if temperature < Min_temp:
         Change_historical("Minimo temperatura" ,temperature , "Tiempo Minimo temperatura" , timeUTC )
-        historicals = get_historicals()
-        Min_temp = historicals[6]
-        Time_Min_temp = historicals[18]
-        print("Min_temp" , Min_temp )
-        print("Time_Min_temp" , Time_Min_temp )
+#         historicals = get_historicals()
+#         Min_temp = historicals[6]
+#         Time_Min_temp = historicals[18]
+#         print("Min_temp" , Min_temp )
+#         print("Time_Min_temp" , Time_Min_temp )
         
     if humidity < Min_Hum:
         Change_historical("Minimo humedad" , humidity ,"Tiempo Minimo humedad", timeUTC )
-        historicals = get_historicals()
-        Min_Hum = historicals[7]
-        Time_Min_Hum = historicals[19]
-        print("Min_Hum" , Min_Hum )
-        print("Time_Min_Hum" , Time_Min_Hum )
+#         historicals = get_historicals()
+#         Min_Hum = historicals[7]
+#         Time_Min_Hum = historicals[19]
+#         print("Min_Hum" , Min_Hum )
+#         print("Time_Min_Hum" , Time_Min_Hum )
         
     if pressure < Min_pressure:
         Change_historical("Minimo presion" , pressure,"Tiempo Minimo presion",timeUTC)
-        print("min historical:", pressure)
-        historicals = get_historicals()
-        Min_pressure = historicals[8]
-        Time_Min_pressure = historicals[20]
-        print("Min_pressure" , Min_pressure )
-        print("Time_Min_pressure" , Time_Min_pressure )
+#         print("min historical:", pressure)
+#         historicals = get_historicals()
+#         Min_pressure = historicals[8]
+#         Time_Min_pressure = historicals[20]
+#         print("Min_pressure" , Min_pressure )
+#         print("Time_Min_pressure" , Time_Min_pressure )
                
     if lum < Min_ligth:
         Change_historical("Minimo luz", lum,"Tiempo Minimo luz",timeUTC)
-        historicals = get_historicals()
-        Min_ligth = historicals[9]
-        Time_Min_ligth = historicals[21]
-        print("Min_ligth" , Min_ligth )
-        print("Time_Min_ligth" , Time_Min_ligth )
+#         historicals = get_historicals()
+#         Min_ligth = historicals[9]
+#         Time_Min_ligth = historicals[21]
+#         print("Min_ligth" , Min_ligth )
+#         print("Time_Min_ligth" , Time_Min_ligth )
      
     if rain_data < Min_rain:
         Change_historical("Minimo lluvia", rain_data, "Tiempo Minimo lluvia",timeUTC)
-        historicals = get_historicals()
-        Min_rain = historicals[10]
-        Time_Min_rain = historicals[22]
-        print("Min_rain" , Min_rain )
-        print("Time_Min_rain" , Time_Min_rain )
+#         historicals = get_historicals()
+#         Min_rain = historicals[10]
+#         Time_Min_rain = historicals[22]
+#         print("Min_rain" , Min_rain )
+#         print("Time_Min_rain" , Time_Min_rain )
         
     if SpeedReal_ < Min_Speed:
         Change_historical("Minimo viento", SpeedReal_,"Tiempo Minimo viento",timeUTC)
-        Min_Speed = historicals[11]
-        Time_Min_Speed = historicals[23]
-        print("Min_Speed" , Min_Speed )
-        print("Time_Min_Speed" , Time_Min_Speed )
+#         Min_Speed = historicals[11]
+#         Time_Min_Speed = historicals[23]
+#         print("Min_Speed" , Min_Speed )
+#         print("Time_Min_Speed" , Time_Min_Speed )
 
-    
+#     byte_Min_ligth =  ustruct.pack('H', Min_ligth)
+#     print(hex(byte_Min_ligth[1]) + hex(byte_Min_ligth[0]))
+#     print(Min_ligth)
         
     utime.sleep(0.5)
+    
+    
+    
+
