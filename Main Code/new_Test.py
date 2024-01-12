@@ -231,7 +231,7 @@ def Sensors(get_historical):
     
     global count
 #     if get_historical == "True":
-#         #inicializacion variables de la flash
+        #inicializacion variables de la flash
     (Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
     Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
     Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
