@@ -41,10 +41,9 @@ def date_hex_ascii(time_date):
     packed_data = ustruct.pack('BB', *hex_ascii_digits)
     return packed_data
 
-
-gps_on = False
 def GPS(request):
     # GPS active flag
+    gps_on = False
     
     sentence = uart.readline()
 
@@ -65,8 +64,7 @@ def GPS(request):
         timeUTC = '{:02d}:{:02d}:{:02d}'.format(horas, minutos, segundos)
         dateNew = '{:02d}-{:02d}-{:02d}'.format(dia, mes, ano)
         
-        print("20" , ano)
-
+        print(f"20{ano}")
 
         # Check if GPS is configured
         if ano == 80 or ano == 0:
@@ -74,7 +72,7 @@ def GPS(request):
         else:
             gps_on = True
             
-        print(gps_on , "qwq")
+        #print(gps_on , "qwq")
         # Convert time and date components to bytes
         byte_hora = date_hex_ascii(horas)
         byte_minuto = date_hex_ascii(minutos)
@@ -88,6 +86,7 @@ def GPS(request):
             return byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, gps_on
         
         elif request == "Status":
+            #print("Status GPS")
             return gps_on, timeUTC
 
     # Return default values if no GPS data is available
@@ -106,6 +105,66 @@ def calculate_speed(time_sec):
     kmpersec = dist_km / time_sec
     kmperhour = kmpersec * SecsInAnHour
     return kmperhour * Adjustment
+
+def Alertas(sets):
+    print(len(sets))
+    temperatura_min = bytearray(2)
+    temperatura_min[0] = sets[0]
+    temperatura_min[1] = sets[1]
+    temperatura_min_ = int.from_bytes(temperatura_min, 'big')
+    
+    temperatura_max = bytearray(2)
+    temperatura_max[0] = sets[2]
+    temperatura_max[1] = sets[3]
+    temperatura_max_ = int.from_bytes(temperatura_max, 'big')
+    
+    humedad_min = bytearray(2)
+    humedad_min[0] = sets[4]
+    humedad_min[1] = sets[5]
+    humedad_min_ = int.from_bytes(humedad_min, 'big')
+    
+    humedad_max = bytearray(2)
+    humedad_max[0] = sets[6]
+    humedad_max[1] = sets[7]
+    humedad_max_ = int.from_bytes(humedad_max, 'big')
+    
+    pressure_min = bytearray(4)
+    pressure_min[0] = sets[8]
+    pressure_min[1] = sets[9]
+    pressure_min[2] = sets[10]
+    pressure_min[3] = sets[11]
+    pressure_min_ = int.from_bytes(pressure_min, 'big')
+    
+    pressure_max = bytearray(4)
+    pressure_max[0] = sets[12]
+    pressure_max[1] = sets[13]
+    pressure_max[2] = sets[14]
+    pressure_max[3] = sets[15]
+    pressure_max_ = int.from_bytes(pressure_max, 'big')
+    
+    speed_wind_min = bytearray(2)
+    speed_wind_min[0] = sets[16]
+    speed_wind_min[1] = sets[17]
+    speed_wind_min_ = int.from_bytes(speed_wind_min, 'big')
+    
+    speed_wind_max = bytearray(2)
+    speed_wind_max[0] = sets[18]
+    speed_wind_max[1] = sets[19]
+    speed_wind_max_ = int.from_bytes(speed_wind_max, 'big')
+    
+    rain_min = bytearray(2)
+    rain_min[0] = sets[20]
+    rain_min[1] = sets[21]
+    rain_min_ = int.from_bytes(rain_min, 'big')
+    
+    rain_max = bytearray(2)
+    rain_max[0] = sets[22]
+    rain_max[1] = sets[23]
+    rain_max_ = int.from_bytes(rain_max, 'big')
+    
+    print(f" min_temp {temperatura_min_}  max_temp {temperatura_max_} \n min_hum {humedad_min_} max_hum {humedad_max_}")
+    print(f"min_pressure {pressure_min_} max_pressure {pressure_max_}\n min_speed_wind {speed_wind_min_} max_speed_wind {speed_wind_max_}")
+    print(f"rain_min_ {rain_min_} rain_max_ {rain_max_}")    
 
 def get_historicals():
     try:
@@ -171,8 +230,7 @@ def get_historicals():
     Time_Min_pressure = contadores.get("Tiempo Minimo presion", 0)
     Time_Min_ligth = contadores.get("Tiempo Minimo luz", 0)
     Time_Min_rain = contadores.get("Tiempo Minimo lluvia", 0)
-    Time_Min_Speed = contadores.get("Tiempo Minimo viento", 0)
-    
+    Time_Min_Speed = contadores.get("Tiempo Minimo viento", 0)    
     
     return (
         Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
@@ -215,29 +273,82 @@ def Data_received():
         if  len(byte_array) > 12 and byte_array[0] == 0x7E :
             print("lleva marca")
             request = True
-            #index 1hrs - 3hrs - 5hrs
+            
+            #index
             if byte_array[15] == 0x48 and byte_array[16] == 0x02 and byte_array[17] == 0x01:
                 comand = "1hr"
                 print("modo 1hr activo")
             if byte_array[15] == 0x48 and byte_array[16] == 0x02 and byte_array[17] == 0x03:
-                comand = "3hr"
-                print("modo 3hr activo")
+                hora = bytearray(6)
+                if len(hora) == 6:
+                    hora[0] =  byte_array[18]
+                    hora[1] =  byte_array[19]
+                    hora[2] =  byte_array[20]
+                    hora[3] =  byte_array[21]
+                    hora[4] =  byte_array[22]
+                    hora[5] =  byte_array[23]
+                    
+                    Send_3_hours(hora)
+                    
+                    print(f"esta es la hora {hora}")
+                    comand = "3hr"
+                    print("modo 3hr activo")
+                    
             if byte_array[15] == 0x48 and byte_array[16] == 0x02 and byte_array[17] == 0x05:
                 comand = "5hr"
                 print("modo 5hr activo")
+            if byte_array[15] == 0x62:
+                print("bateria")
+                comand = "battery"
+            if byte_array[15] == 0x70:
+                print("panel")
+                comand = "panel"
+            if byte_array[15] == 0x54 and byte_array[16] == 0x01:
+                print("on gateway")
+            if byte_array[15] == 0x52:
+                print("reset alarmas")
+                comand = "reset"
+            if byte_array[15] == 0x73 and byte_array[16] == 0x03:
+                print("send sensors")
+                Send_Sensors_GPS()
+                comand = "send_"
+            if byte_array[15] == 0x53 and byte_array[16] == 0x02:
+                print("configurando setpoints")
                 
+                set_points = bytearray(24) #length message
+                set_points = bytearray(byte_array[17:41])
+                
+                if len(set_points) == 24:
+                    Alertas(set_points)
+               
     return comand
-def Sensors(get_historical):
+
+def Send_3_hours(hora):
+    #pendiente envio de 3 horas
+    hora_1 = bytearray(2)
+    hora_1[0] = hora[0]
+    hora_1[1] = hora[1]
     
+    byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
+    print(byte_hora)
+    
+    hora_1_ = bytearray(2)
+    hora_1_ = byte_hora[1]
+    hora_1_ = byte_hora[0]
+    
+    
+    print(hora_1 , " -- " , hora_1_)
+    
+
+def Sensors():
     global count
-#     if get_historical == "True":
-        #inicializacion variables de la flash
+    
     (Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
     Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
     Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
     Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed)  = get_historicals()
-    print("iniciamos variables")
-         
+    
+    #print("iniciamos variables")
     
     #Wind direccion
     wind_dir = machine.ADC(27)
@@ -332,12 +443,15 @@ def Sensors(get_historical):
     pressure =  int((sensor_pres)*100)
     pressureBytes = ustruct.pack('I',pressure)
     
-    Gps_active,timeUTC = GPS("Status")
+    byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
     utime.sleep(.2)
+    
+    print(f"hora {byte_hora}")
     
     try:
         if Gps_active == True:
             
+            #print("historicals" )
             #Historicals Max
             if temperature > Max_temp:      
                 Change_historical("Maximo temperatura", temperature,"Tiempo Maximo temperatura",timeUTC)
@@ -509,14 +623,10 @@ def Send_Sensors_GPS():
 #inicializacion variables de la flash
 print("Run")
 
-#evita repetir la lectura de la flash
-archivo_txt = "True" 
-
 while True:
     data = Data_received()
-    if(data == "1hr"):
-        print("comando 1hr")
-        Send_Sensors_GPS()
-    GPS("data")
-    Sensors(archivo_txt)
+    byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
+    #GPS("data")
+    Sensors()
     archivo_txt = "False"
+    
