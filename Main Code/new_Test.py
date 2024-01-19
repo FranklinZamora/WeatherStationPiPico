@@ -198,7 +198,8 @@ def get_historicals():
             "Tiempo Minimo presion": 0,
             "Tiempo Minimo luz": 0,
             "Tiempo Minimo lluvia": 0,
-            "Tiempo Minimo viento": 0
+            "Tiempo Minimo viento": 0,
+            "Direccion de viento predominante": "",
         }
 
         # Guarda el diccionario inicial en el archivo
@@ -231,14 +232,28 @@ def get_historicals():
     Time_Min_pressure = contadores.get("Tiempo Minimo presion", 0)
     Time_Min_ligth = contadores.get("Tiempo Minimo luz", 0)
     Time_Min_rain = contadores.get("Tiempo Minimo lluvia", 0)
-    Time_Min_Speed = contadores.get("Tiempo Minimo viento", 0)    
+    Time_Min_Speed = contadores.get("Tiempo Minimo viento", 0)
+    wind_direction = contadores.get("Direccion de viento predominante", "")
     
     return (
         Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
         Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
         Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
-        Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed
+        Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
+        wind_direction
             )
+def change_dir(Sensor_name,Sensor_data):
+    try:
+        with open('/Max_min.txt', 'r') as file:
+            historical = eval(file.read())
+        
+        historical[Sensor_name] = Sensor_data
+        with open('/Max_min.txt', 'w') as file:
+            file.write(str(historical))
+            
+    except (OSError, SyntaxError):
+        # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+        historical = {}
     
 def Change_historical(Sensor_name,Sensor_data,Sensor_time,time):
     try:
@@ -298,9 +313,10 @@ def Data_received(Coordinador):
         if all(Coordinador[i] == byte_array[i + 4] for i in range(8)):
                 
             if byte_array[15] == 0x48 and byte_array[16] == 0x02 and byte_array[17] == 0x01:
-                print("modo 1hr activo")
+                print("\nmodo 1hr activo")
                 return "1hr"
             if byte_array[15] == 0x48 and byte_array[16] == 0x02 and byte_array[17] == 0x03:
+                print("\ncomando 3h")
                 hora = bytearray(6)
                 if len(hora) == 6:
                     hora[0] =  byte_array[18]
@@ -309,16 +325,11 @@ def Data_received(Coordinador):
                     hora[3] =  byte_array[21]
                     hora[4] =  byte_array[22]
                     hora[5] =  byte_array[23]
-                    
                     return hora
-                    
-                    Send_3_hours(hora)
-                    
-                    print(f"esta es la hora {hora}")
-                    print("modo 3hr activo")
                     
             if byte_array[15] == 0x48 and byte_array[16] == 0x02 and byte_array[17] == 0x05:
                 hora = bytearray(10)
+                print("\nmodo 5hr activo")
                 if len(hora) == 10:
                     hora[0] =  byte_array[18]
                     hora[1] =  byte_array[19]
@@ -332,7 +343,7 @@ def Data_received(Coordinador):
                     hora[9] =  byte_array[27]
                     
                     return hora
-                print("modo 5hr activo")
+                
             if byte_array[15] == 0x62:
                 print("bateria")
             if byte_array[15] == 0x70:
@@ -351,22 +362,6 @@ def Data_received(Coordinador):
                 
                 if len(set_points) == 24:
                     Alertas(set_points)
-
-def Send_3_hours(hora):
-    #pendiente envio de 3 horas
-    hora_1 = bytearray(2)
-    hora_1[0] = hora[0]
-    hora_1[1] = hora[1]
-    
-    byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
-    print(byte_hora)
-    
-    hora_1_ = bytearray(2)
-    hora_1_ = byte_hora[1]
-    hora_1_ = byte_hora[0]
-    
-    
-    print(hora_1 , " -- " , hora_1_)
     
 def search_coordinador():
     search = [20]
@@ -399,6 +394,7 @@ def Send_Sensors_GPS(tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, 
         frame[14]= 0xFE
         frame[15]= 0x00 #broadcast
         frame[16]= 0x00 #options
+        #header
         frame[17] = tempCBytes[1]
         frame[18] = tempCBytes[0]
         frame[19] = tempFBytes[1]
@@ -446,6 +442,7 @@ def Send_Sensors_GPS(tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, 
         frame[14]= 0xFE
         frame[15]= 0x00 #broadcast
         frame[16]= 0x00 #options
+        #header
         frame[17] = tempCBytes[1]
         frame[18] = tempCBytes[0]
         frame[19] = tempFBytes[1]
@@ -483,6 +480,24 @@ def Send_Sensors_GPS(tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, 
         frame[49] = checksum
         xbee.write(frame)
         
+def obtener_direccion_viento_actual(wind, wind_directions):
+    for direction, lower, upper in wind_directions:
+        if lower <= wind <= upper:
+            return direction
+    return None
+
+def obtener_direccion_viento_predominante(wind_directions):
+    direction_freq = {}
+    
+    for direction, _, _ in wind_directions:
+        if direction in direction_freq:
+            direction_freq[direction] += 1
+        else:
+            direction_freq[direction] = 1
+    
+    predominant_direction = max(direction_freq, key=direction_freq.get)
+    return predominant_direction
+        
 def get_mac():
     try:
         with open('M_flash.txt', 'r') as file:
@@ -506,16 +521,32 @@ print("Run")
 (Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
 Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
 Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
-Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed)  = get_historicals()
+Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
+wind_direction)  = get_historicals()
+
+#predominant wind
+predominant_directions_count = {
+    "NORTE": 0,
+    "ESTE": 0,
+    "SUR": 0,
+    "OESTE": 0,
+    "NE": 0,
+    "NNE": 0,
+    "ESE": 0,
+    "SE": 0,
+    "SSE": 0,
+    "SSO": 0,
+    "SO": 0,
+    "OSO": 0,
+    "ONO": 0,
+    "NO": 0,
+    }
 
 #search_coordinador()
-
 Coordinador = bytearray(10)
 consular_mac = False
 Coordinador = get_mac()
 print("this ",Coordinador)
-
-
 
 last_time = 0
 hora_1=0
@@ -538,7 +569,7 @@ ascii_minute = 0
 while True:
     data = ""  
     if Coordinador[1] != 0:
-        if Coordinador[8] == 0x4E and Coordinador[9] == 0x44:
+        if Coordinador[8] == 0x4E and Coordinador[9] == 0x44: #check txt ND
             pass
             #print("se tiene coordinador ")
     else:
@@ -606,11 +637,11 @@ while True:
         ("SSO", 112.5, 116.8),
         ("SO", 170.3, 177.8),
         ("OSO", 167.0, 169.6),
-        ("OSO", 167.0, 169.6),
         ("ONO", 194.5, 197.1),
         ("NO", 201.6, 205.4),
         ("NO", 180.7, 201.3),
         ]
+    
 
     # Inicializa la dirección del viento como vacía
     dir_wind = ""
@@ -620,9 +651,8 @@ while True:
         if lower <= wind <= upper:
             dir_wind = direction
             break
+    
     rain_drop = rain_drop_sensor.read_u16()
-    #print(rain_drop)
-
     if rain_drop >= 60001:
         count = 0
         
@@ -683,6 +713,7 @@ while True:
     utime.sleep(.2)
     
     #send data
+    
     if data == "send":
         Send_Sensors_GPS(tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes)
     
@@ -735,8 +766,35 @@ while True:
             if ascii_minute == hora_5 and hora_5_bool == True:
                 Send_Sensors_GPS(tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes)
                 hora_5_bool = False
+    
+    predominant_directions_count[dir_wind] += 1
+    most_common_direction = max(predominant_directions_count, key=predominant_directions_count.get)
+    print("Dirección del viento más frecuente:", most_common_direction)
+    highest_value = predominant_directions_count[most_common_direction]
+    
+    print("hig ",highest_value )
+    print("this ",dir_wind)
+    
+    if highest_value == 10: #restart direction
+        predominant_directions_count = {
+        "NORTE": 0,
+        "ESTE": 0,
+        "SUR": 0,
+        "OESTE": 0,
+        "NE": 0,
+        "NNE": 0,
+        "ESE": 0,
+        "SE": 0,
+        "SSE": 0,
+        "SSO": 0,
+        "SO": 0,
+        "OSO": 0,
+        "ONO": 0,
+        "NO": 0,
+        }
         try:
             if Gps_active == True:
+                if
                 
                 #Historicals Max
                 if temperature > Max_temp:      
