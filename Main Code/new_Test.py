@@ -352,7 +352,7 @@ def Data_received(Coordinador):
         if all(Coordinador[i] == byte_array[i + 4] for i in range(8)) and byte_array[15] == 0x45:
             
             if byte_array[16] == 0x54 and byte_array[17] == 0x01 and byte_array[18] == 0xB3:
-                print("Encendido virtual")
+                print("\nEncendido virtual")
                 try:
                     with open('/Max_min.txt', 'r') as file:
                         historical = eval(file.read())
@@ -365,8 +365,53 @@ def Data_received(Coordinador):
                     # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
                     historical = {}
                 
+            if byte_array[16] == 0x54 and byte_array[17] == 0x00 and byte_array[18] == 0xB3:
+                print("\nApagado virtual")
+                try:
+                    with open('/Max_min.txt', 'r') as file:
+                        historical = eval(file.read())
+                    
+                    historical["Encendido virtual"] = False
+                    with open('/Max_min.txt', 'w') as file:
+                        file.write(str(historical))
+                        
+                except (OSError, SyntaxError):
+                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+                    historical = {}
+                    
+            frame_H = bytearray(120)
+                    
+            #format of hours message
+            frame_H[0] = 0x7E #Start
+            frame_H[1] = 0x00 #length
+            frame_H[2] = 0x00
+            frame_H[3] = 0x10 #type
+            frame_H[4] = 0x01 #ID
+            frame_H[5] = 0x00 #MAC
+            frame_H[6] = 0x13
+            frame_H[7] = 0xA2
+            frame_H[8] = 0x00
+            frame_H[9] = 0x41
+            frame_H[10]= 0xEA
+            frame_H[11]= 0x56
+            frame_H[12]= 0x61 #END_MAC
+            frame_H[13]= 0xFF #address
+            frame_H[14]= 0xFE
+            frame_H[15]= 0x00 #broadcast
+            frame_H[16]= 0x00 #options
+            frame_H[17] = 0x45 #header E
+            frame_H[18] = 0x48 #hours comand
+                
             if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x01:
                 print("\nmodo 1hr activo")
+                frame_H[2] = 0x18 #adjust length
+                frame_H[19] = 0x02
+                frame_H[20] = 0x01
+                frame_H[21] = 0x00
+                checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                frame_H[21] = checksum_gps
+                xbee.write(frame_H)
+                
                 return "1hr"
             if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x03:
                 print("\ncomando 3h")
@@ -378,6 +423,21 @@ def Data_received(Coordinador):
                     hora[3] =  byte_array[22]
                     hora[4] =  byte_array[23]
                     hora[5] =  byte_array[24]
+                    
+                    frame_H[2] = 0x18 #adjust length
+                    frame_H[19] = 0x02
+                    frame_H[20] = 0x03
+                    frame_H[21] = hora[0] 
+                    frame_H[22] = hora[1] 
+                    frame_H[23] = hora[2] 
+                    frame_H[24] = hora[3] 
+                    frame_H[25] = hora[4]
+                    frame_H[26] = hora[5]
+                    frame_H[27] = 0x00
+                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                    frame_H[27] = checksum_gps
+                    xbee.write(frame_H)
+                    
                     return hora
                     
             if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x05:
@@ -394,6 +454,24 @@ def Data_received(Coordinador):
                     hora[7] =  byte_array[26]
                     hora[8] =  byte_array[27]
                     hora[9] =  byte_array[28]
+                    
+                    frame_H[2] = 0x1C #adjust length
+                    frame_H[19] = 0x02
+                    frame_H[20] = 0x03
+                    frame_H[21] = hora[0] 
+                    frame_H[22] = hora[1] 
+                    frame_H[23] = hora[2] 
+                    frame_H[24] = hora[3] 
+                    frame_H[25] = hora[4]
+                    frame_H[26] = hora[5]
+                    frame_H[27] = hora[6] 
+                    frame_H[28] = hora[7] 
+                    frame_H[29] = hora[8]
+                    frame_H[30] = hora[9]
+                    frame_H[31] = 0x00
+                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                    frame_H[31] = checksum_gps
+                    xbee.write(frame_H)
                     return hora
                 
             if byte_array[16] == 0x62:
@@ -737,17 +815,26 @@ ascii_minute = 0
 
 last_wind_directions = ""
 
+contador_mac = 15
+
 while True:
     try: 
         data = ""  
         if Coordinador[1] != 0: #check flash if there's data
             if Coordinador[8] == 0x4E and Coordinador[9] == 0x44: #check txt ND
+                contador_mac = 0
                 pass
                 #print("se tiene coordinador ")
         else:
-            print("buscar coordinador")
-            search_coordinador()
-            consular_mac = True
+            if contador_mac >= 16:
+                contador_mac = 0
+            print("llegando a 15 para enviar ",contador_mac)
+            if contador_mac == 15:
+                print("buscar coordinador")
+                search_coordinador()
+                consular_mac = True
+            contador_mac+=1
+                
         data = Data_received(Coordinador)  
         if consular_mac == True:
             Coordinador = get_mac()
@@ -1049,4 +1136,5 @@ while True:
             print(f"An exception occurred historicals: {e}")             
     except Exception as e:
                 print(f"An exception occurred in general code: {e}")
-     
+        
+
