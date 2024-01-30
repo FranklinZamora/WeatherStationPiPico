@@ -112,7 +112,7 @@ def GPS(request):
             gps_on = True
             
         # Convert time and date components to bytes
-        byte_segundo, byte_minuto, byte_hora = time_hex_historicals(timeUTC) #pepepepepepep
+        byte_segundo, byte_minuto, byte_hora = time_hex_historicals(timeUTC) 
 #         byte_hora = date_hex_ascii(horas)
 #         byte_minuto = date_hex_ascii(minutos)
 #         byte_segundo = date_hex_ascii(segundos)
@@ -238,7 +238,8 @@ def get_historicals():
             "Tiempo Minimo lluvia": '00:00:00',
             "Tiempo Minimo viento": '00:00:00',
             "Direccion de viento predominante": "",
-            "Encendido virtual": False
+            "Encendido virtual": False,
+            "Sensores Activos": ""
         }
 
         # Guarda el diccionario inicial en el archivo
@@ -274,13 +275,14 @@ def get_historicals():
     Time_Min_Speed = contadores.get("Tiempo Minimo viento", '00:00:00')
     wind_direction = contadores.get("Direccion de viento predominante", "")
     encendido_virtual = contadores.get("Encendido virtual", False)
+    Sensors_on = contadores.get("Sensores Activos", "")
     
     return (
         Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
         Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
         Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
         Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
-        wind_direction,encendido_virtual #return encendido virtual
+        wind_direction,encendido_virtual,Sensors_on #return encendido virtual
             )
 def change_dir(Sensor_name,Sensor_data):
     try:
@@ -313,7 +315,7 @@ def Change_historical(Sensor_name,Sensor_data,Sensor_time,time):
         # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
         historical = {}
 
-def Data_received(Coordinador):
+def Data_received(Coordinador, Sensors_on):
     data = ""
     data = xbee.read()
     byte_array = []
@@ -347,40 +349,14 @@ def Data_received(Coordinador):
                 # Write the mac string to a file
                 with open('M_flash.txt', 'w') as file:
                     file.write(mac_string)
+                    
+                return mac
             
             
         if all(Coordinador[i] == byte_array[i + 4] for i in range(8)) and byte_array[15] == 0x45:
             
-            if byte_array[16] == 0x54 and byte_array[17] == 0x01 and byte_array[18] == 0xB3:
-                print("\nEncendido virtual")
-                try:
-                    with open('/Max_min.txt', 'r') as file:
-                        historical = eval(file.read())
-                    
-                    historical["Encendido virtual"] = True
-                    with open('/Max_min.txt', 'w') as file:
-                        file.write(str(historical))
-                        
-                except (OSError, SyntaxError):
-                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
-                    historical = {}
-                
-            if byte_array[16] == 0x54 and byte_array[17] == 0x00 and byte_array[18] == 0xB3:
-                print("\nApagado virtual")
-                try:
-                    with open('/Max_min.txt', 'r') as file:
-                        historical = eval(file.read())
-                    
-                    historical["Encendido virtual"] = False
-                    with open('/Max_min.txt', 'w') as file:
-                        file.write(str(historical))
-                        
-                except (OSError, SyntaxError):
-                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
-                    historical = {}
-                    
             frame_H = bytearray(120)
-                    
+            
             #format of hours message
             frame_H[0] = 0x7E #Start
             frame_H[1] = 0x00 #length
@@ -401,98 +377,202 @@ def Data_received(Coordinador):
             frame_H[16]= 0x00 #options
             frame_H[17] = 0x45 #header E
             frame_H[18] = 0x48 #hours comand
+            
+            if byte_array[16] == 0x54 and byte_array[17] == 0x01 and byte_array[18] == 0xB3:
+                print("\nEncendido virtual")
+                try:
+                    with open('/Max_min.txt', 'r') as file:
+                        historical = eval(file.read())
+                    
+                    historical["Encendido virtual"] = True
+                    with open('/Max_min.txt', 'w') as file:
+                        file.write(str(historical))
+                        
+                    frame_H[2] = 0x18 #adjust length
+                    frame_H[18] = 0x54
+                    frame_H[19] = 0X03
+                    frame_H[20] = 0XB3
+                    frame_H[21] = 0x00
+                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                    frame_H[21] = checksum_gps
+                    xbee.write(frame_H)
+                    
+                    return True
+                        
+                except (OSError, SyntaxError):
+                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+                    historical = {}
+                    
+            if byte_array[16] == 0x54 and byte_array[17] == 0x00 and byte_array[18] == 0xB3:
+                print("\nApagado virtual")
+                try:
+                    with open('/Max_min.txt', 'r') as file:
+                        historical = eval(file.read())
+                    
+                    historical["Encendido virtual"] = False
+                    with open('/Max_min.txt', 'w') as file:
+                        file.write(str(historical))
+                        
+                    frame_H[2] = 0x18 #adjust length
+                    frame_H[18] = 0x54
+                    frame_H[19] = 0X03
+                    frame_H[20] = 0XB3
+                    frame_H[21] = 0x00
+                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                    frame_H[21] = checksum_gps
+                    xbee.write(frame_H)
+                        
+                    return False
+                        
+                except (OSError, SyntaxError):
+                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+                    historical = {}
+                    
+            if byte_array[16] == 0x73 and byte_array[17] == 0x01:
+                print("encender sensores")
+                try:
+                    with open('/Max_min.txt', 'r') as file:
+                        historical = eval(file.read())
+                    historical["Sensores Activos"] = "Sensors_on"
+                    with open('/Max_min.txt', 'w') as file:
+                        file.write(str(historical))
+                        
+                    frame_H[2] = 0x18 #adjust length
+                    frame_H[18] = 0x73
+                    frame_H[19] = 0x4F
+                    frame_H[20] = 0x4E
+                    frame_H[21] = 0x00
+                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                    frame_H[21] = checksum_gps
+                    xbee.write(frame_H)
+                    
+                    return "Sensors_on"
+                except (OSError, SyntaxError):
+                    historical = {}
                 
-            if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x01:
-                print("\nmodo 1hr activo")
-                frame_H[2] = 0x18 #adjust length
-                frame_H[19] = 0x02
-                frame_H[20] = 0x01
-                frame_H[21] = 0x00
-                checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                frame_H[21] = checksum_gps
-                xbee.write(frame_H)
-                
-                return "1hr"
-            if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x03:
-                print("\ncomando 3h")
-                hora = bytearray(6)
-                if len(hora) == 6:
-                    hora[0] =  byte_array[19]
-                    hora[1] =  byte_array[20]
-                    hora[2] =  byte_array[21]
-                    hora[3] =  byte_array[22]
-                    hora[4] =  byte_array[23]
-                    hora[5] =  byte_array[24]
+            if byte_array[16] == 0x73 and byte_array[17] == 0x00:
+                print("apagar sensores")
+                try:
+                    with open('/Max_min.txt', 'r') as file:
+                        historical = eval(file.read())
+                    historical["Sensores Activos"] = "Sensors_off"
+                    with open('/Max_min.txt', 'w') as file:
+                        file.write(str(historical))
                     
                     frame_H[2] = 0x18 #adjust length
-                    frame_H[19] = 0x02
-                    frame_H[20] = 0x03
-                    frame_H[21] = hora[0] 
-                    frame_H[22] = hora[1] 
-                    frame_H[23] = hora[2] 
-                    frame_H[24] = hora[3] 
-                    frame_H[25] = hora[4]
-                    frame_H[26] = hora[5]
-                    frame_H[27] = 0x00
+                    frame_H[18] = 0x73
+                    frame_H[19] = 0x4F
+                    frame_H[20] = 0x4E
+                    frame_H[21] = 0x46
+                    frame_H[22] = 0x46
+                    frame_H[23] = 0x00
                     checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[27] = checksum_gps
+                    frame_H[23] = checksum_gps
                     xbee.write(frame_H)
                     
-                    return hora
+                    return "Sensors_off"
+                except (OSError, SyntaxError):
+                    historical = {}
+                
+            
+            if Sensors_on == "Sensors_on":        
                     
-            if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x05:
-                hora = bytearray(10)
-                print("\nmodo 5hr activo")
-                if len(hora) == 10:
-                    hora[0] =  byte_array[19]
-                    hora[1] =  byte_array[20]
-                    hora[2] =  byte_array[21]
-                    hora[3] =  byte_array[22]
-                    hora[4] =  byte_array[23]
-                    hora[5] =  byte_array[24]
-                    hora[6] =  byte_array[25]
-                    hora[7] =  byte_array[26]
-                    hora[8] =  byte_array[27]
-                    hora[9] =  byte_array[28]
-                    
-                    frame_H[2] = 0x1C #adjust length
+                if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x01:
+                    print("\nmodo 1hr activo")
+                    frame_H[2] = 0x18 #adjust length
                     frame_H[19] = 0x02
-                    frame_H[20] = 0x03
-                    frame_H[21] = hora[0] 
-                    frame_H[22] = hora[1] 
-                    frame_H[23] = hora[2] 
-                    frame_H[24] = hora[3] 
-                    frame_H[25] = hora[4]
-                    frame_H[26] = hora[5]
-                    frame_H[27] = hora[6] 
-                    frame_H[28] = hora[7] 
-                    frame_H[29] = hora[8]
-                    frame_H[30] = hora[9]
-                    frame_H[31] = 0x00
+                    frame_H[20] = 0x01
+                    frame_H[21] = 0x00
                     checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[31] = checksum_gps
+                    frame_H[21] = checksum_gps
                     xbee.write(frame_H)
-                    return hora
+                    
+                    return "1hr"
+                if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x03:
+                    print("\ncomando 3h")
+                    hora = bytearray(6)
+                    if len(hora) == 6:
+                        hora[0] =  byte_array[19]
+                        hora[1] =  byte_array[20]
+                        hora[2] =  byte_array[21]
+                        hora[3] =  byte_array[22]
+                        hora[4] =  byte_array[23]
+                        hora[5] =  byte_array[24]
+                        
+                        frame_H[2] = 0x18 #adjust length
+                        frame_H[19] = 0x02
+                        frame_H[20] = 0x03
+                        frame_H[21] = hora[0] 
+                        frame_H[22] = hora[1] 
+                        frame_H[23] = hora[2] 
+                        frame_H[24] = hora[3] 
+                        frame_H[25] = hora[4]
+                        frame_H[26] = hora[5]
+                        frame_H[27] = 0x00
+                        checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                        frame_H[27] = checksum_gps
+                        xbee.write(frame_H)
+                        
+                        return hora
+                        
+                if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x05:
+                    hora = bytearray(10)
+                    print("\nmodo 5hr activo")
+                    if len(hora) == 10:
+                        hora[0] =  byte_array[19]
+                        hora[1] =  byte_array[20]
+                        hora[2] =  byte_array[21]
+                        hora[3] =  byte_array[22]
+                        hora[4] =  byte_array[23]
+                        hora[5] =  byte_array[24]
+                        hora[6] =  byte_array[25]
+                        hora[7] =  byte_array[26]
+                        hora[8] =  byte_array[27]
+                        hora[9] =  byte_array[28]
+                        
+                        frame_H[2] = 0x1C #adjust length
+                        frame_H[19] = 0x02
+                        frame_H[20] = 0x03
+                        frame_H[21] = hora[0] 
+                        frame_H[22] = hora[1] 
+                        frame_H[23] = hora[2] 
+                        frame_H[24] = hora[3] 
+                        frame_H[25] = hora[4]
+                        frame_H[26] = hora[5]
+                        frame_H[27] = hora[6] 
+                        frame_H[28] = hora[7] 
+                        frame_H[29] = hora[8]
+                        frame_H[30] = hora[9]
+                        frame_H[31] = 0x00
+                        checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                        frame_H[31] = checksum_gps
+                        xbee.write(frame_H)
+                        return hora
+                    
+                if byte_array[16] == 0x62:
+                    print("bateria")
+                if byte_array[16] == 0x70:
+                    print("panel")
+    #             if byte_array[16] == 0x54 and byte_array[17] == 0x01:
+    #                 print("on gateway")
+    #                 return "historicals"
+                if byte_array[16] == 0x52:
+                    print("reset alarmas")
+                if byte_array[16] == 0x73 and byte_array[17] == 0x03:
+                    print("send sensors")
+                    return "send"
+                if byte_array[16] == 0x53 and byte_array[17] == 0x02:
+                    print("set points desactivados")
+                if byte_array[16] == 0x53 and byte_array[17] == 0x01:
+                    print("set points activados")
+                if byte_array[16] == 0x53 and byte_array[17] == 0x02:
+                    print("configurando setpoints")
+                    set_points = bytearray(24) #length message
+                    set_points = bytearray(byte_array[17:41])
+                    
+                    if len(set_points) == 24:
+                        Alertas(set_points)
                 
-            if byte_array[16] == 0x62:
-                print("bateria")
-            if byte_array[16] == 0x70:
-                print("panel")
-#             if byte_array[16] == 0x54 and byte_array[17] == 0x01:
-#                 print("on gateway")
-#                 return "historicals"
-            if byte_array[16] == 0x52:
-                print("reset alarmas")
-            if byte_array[16] == 0x73 and byte_array[17] == 0x03:
-                print("send sensors")
-                return "send"
-            if byte_array[16] == 0x53 and byte_array[17] == 0x02:
-                print("configurando setpoints")
-                set_points = bytearray(24) #length message
-                set_points = bytearray(byte_array[17:41])
-                
-                if len(set_points) == 24:
-                    Alertas(set_points)
     
 def search_coordinador():
     search = [20]
@@ -744,6 +824,15 @@ def obtener_direccion_viento_predominante(wind_directions):
     
     predominant_direction = max(direction_freq, key=direction_freq.get)
     return predominant_direction
+
+def wait_time(inicio,tiempo_espera):
+    while True:
+        tiempo_actual = utime.ticks_ms()
+        tiempo_transcurrido = utime.ticks_diff(tiempo_actual, inicio)
+        if tiempo_transcurrido >= tiempo_espera:
+            search_coordinador()
+            consular_mac = True
+            return "time over"
         
 def get_mac():
     try:
@@ -769,7 +858,7 @@ print("Run")
 Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
 Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
 Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
-wind_direction,encendido_virtual)  = get_historicals() #si 
+wind_direction,encendido_virtual, Sensors_on)  = get_historicals() #si 
 
 #predominant wind
 predominant_directions_count = {
@@ -818,13 +907,323 @@ last_wind_directions = ""
 contador_mac = 15
 
 while True:
-    try: 
-        data = ""  
+    try:
+        data = ""
+        utime.sleep(1)
+        data = Data_received(Coordinador, Sensors_on)  
+        if consular_mac == True:
+            Coordinador = get_mac()
+            consular_mac = False
+            
         if Coordinador[1] != 0: #check flash if there's data
             if Coordinador[8] == 0x4E and Coordinador[9] == 0x44: #check txt ND
                 contador_mac = 0
-                pass
-                #print("se tiene coordinador ")
+                byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
+            
+                if isinstance(data,bool):
+                    encendido_virtual = data
+                    print("se envio un encendido")
+                
+                if isinstance(data,bytearray) and len(data) == 6: #check data list of bytes 3hrs
+                    print("tiene las horas", data)
+                    comando_1h = False
+                    comando_3hrs = True
+                    comando_5hrs = False
+                    hora_1_bool = True
+                    hora_2_bool = True
+                    hora_3_bool = True
+                    hora1 = data[0:2]
+                    hora_1  = int(hora1.decode('ascii'))
+                    hora2 = data[2:4]
+                    hora_2  = int(hora2.decode('ascii'))
+                    hora3 = data[4:6]
+                    hora_3  = int(hora3.decode('ascii'))
+                    
+                if isinstance(data,bytearray) and len(data) == 10: #check data list of bytes 10hrs
+                    comando_5hrs = True
+                    comando_3hrs = False
+                    comando_1h = False
+                    hora_1_bool = True
+                    hora_2_bool = True
+                    hora_3_bool = True
+                    hora_4_bool = True
+                    hora_5_bool = True
+                    hora1 = data[0:2]
+                    hora_1  = int(hora1.decode('ascii'))
+                    hora2 = data[2:4]
+                    hora_2  = int(hora2.decode('ascii'))
+                    hora3 = data[4:6]
+                    hora_3  = int(hora3.decode('ascii'))
+                    hora4 = data[6:8]
+                    hora_4  = int(hora4.decode('ascii'))
+                    hora5 = data[8:10]
+                    hora_5  = int(hora5.decode('ascii'))
+                
+                if data == "Sensors_on" or data == "Sensors_off":
+                    Sensors_on = data
+                    
+                print(Sensors_on)
+                
+                if Sensors_on == "Sensors_on":
+                    #Wind direccion
+                    wind_dir = machine.ADC(27)
+                    dir_wind = ""
+                    wind = round((wind_dir.read_u16() * 3.3) / 1000, 1)
+                    wind_directions = [
+                        ("NORTE", 189.2, 194.8),
+                        ("ESTE", 83.4, 86.91),
+                        ("SUR", 119.8, 126.2),
+                        ("OESTE", 205.5, 210.9),
+                        ("NE", 147.7, 151.4),
+                        ("NNE", 136.3, 143.5),
+                        ("ESE", 78.2, 85.2),
+                        ("SE", 101.1, 109.0),
+                        ("SSE", 90.5, 96.2),
+                        ("SSO", 112.5, 116.8),
+                        ("SO", 170.3, 177.8),
+                        ("OSO", 167.0, 169.6),
+                        ("ONO", 194.5, 197.1),
+                        ("NO", 201.6, 205.4),
+                        ("NO", 180.7, 201.3),
+                        ]
+                    
+                    # Inicializa la dirección del viento como vacía
+                    dir_wind = ""
+
+                    # Itera sobre los rangos y asigna la dirección del viento
+                    for direction, lower, upper in wind_directions:
+                        if lower <= wind <= upper:
+                            dir_wind = direction
+                            break
+                    
+                    rain_drop = rain_drop_sensor.read_u16()
+                    if rain_drop >= 60001:
+                        count = 0
+                        
+                    #rain sensor
+                    rain_sensor = Button(8)
+                    rain_sensor.when_pressed = bucket_tipped
+                    rain = count * BUCKET_SIZE
+                    str_rain = str(rain)
+                    str_pRain = str_rain + 'mm/'
+                    rain_data = (int(rain*100))
+                    rain_bytes = ustruct.pack('H', rain_data)
+                        
+                    #Speed Wind sensor Start       
+                    wind_count = 0
+                    time.sleep(wind_interval)
+                    spdCstr = str(calculate_speed(wind_interval))
+                    speedC = spdCstr + 'Kmh/'
+                    speedReal = calculate_speed(wind_interval)
+                    SpeedReal_ = (int(speedReal*100))
+                    Speed_bytes = ustruct.pack('H', SpeedReal_)
+                    
+                    #Altura
+                    mpl = MPL3115A2(i2cmpl, mode=MPL3115A2.ALTITUDE) 
+                    alt = int((mpl.altitude() * -1) * 100) # h = (((101326 / sensor_pres) ** (1/5.257)) - 1) * 44330.8
+                    altBytes = ustruct.pack('H', alt)
+                        
+                    #dir wind
+                    dir_wind_ = (int(wind*100))
+                    dir_wind_Bytes = ustruct.pack('H', dir_wind_)
+                    
+                    #temperature °C
+                    temperature = (int(si7021.temperature()) * 100)
+                    tempCBytes = ustruct.pack('H', temperature)
+                    
+                    #temperature °F
+                    temperatureF = int((si7021.temperature() * 9/5 + 32) * 100)
+                    tempFBytes = ustruct.pack('H',temperatureF)
+                    
+                    #humity
+                    humidity = int(si7021.humidity() * 100)
+                    humBytes = ustruct.pack('H', humidity)
+                    
+                    #Ligth
+                    sensor_luz = machine.ADC(26)
+                    eficacia_luz = 90
+                    reading = sensor_luz.read_u16()
+                    corriente = (reading / 10000)
+                    lum = int((corriente * eficacia_luz)*100)
+                    lumBytes = ustruct.pack('H',lum)
+                    
+                    #pressure
+                    mpl2 = MPL3115A2(i2cmpl, mode=MPL3115A2.PRESSURE)
+                    sensor_pres = mpl2.pressure()
+                    pressure =  int((sensor_pres)*100)
+                    pressureBytes = ustruct.pack('I',pressure)
+                    
+                    #request data  to GPS
+                    byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
+                    utime.sleep(.5)
+                    
+                    enviar = False #control de envio
+                    
+                    print(encendido_virtual, " encendido virtual")
+                    
+                    if data == "send":
+                        if Gps_active == False : #time config 0x50 = 80
+                            Send_Sensors_GPS(tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes)
+                        #send data
+                        if Gps_active == True:
+                            enviar = True
+                            print("enviando historicos")
+                    
+                    if Gps_active == True:
+                        try:
+                            ascii_minute = int(''.join(filter(str.isdigit, byte_minuto.decode('ascii'))))
+                        except ValueError as e:
+                            print("Error converting byte_minuto to integer:", e)
+                            
+                        current_time =  ascii_minute 
+                        if data == "1hr":
+                            comando_1h = True
+                            comando_3hrs = False
+                            comando_5hrs = False
+                            last_time =  ascii_minute - 1
+                            
+                        if current_time == 0: #change 23 -> 00
+                            last_time = -1 #0
+                            
+                        if comando_1h == True:
+                            print("now ",current_time)
+                            print("last",last_time)
+                            print(current_time - last_time)
+                            if current_time - last_time == 1:
+                                enviar = True
+                                last_time = current_time
+                                print("send every hour")
+                                
+                        if comando_3hrs == True:
+                            if ascii_minute == hora_1 and hora_1_bool == True:
+                                enviar = True
+                                hora_1_bool = False
+                            if ascii_minute == hora_2 and hora_2_bool == True:
+                                enviar = True
+                                hora_2_bool = False
+                            if ascii_minute == hora_3 and hora_3_bool == True:
+                                enviar = True
+                                hora_3_bool = False
+                                
+                        if comando_5hrs == True:
+                            if ascii_minute == hora_1 and hora_1_bool == True:
+                                enviar = True
+                                hora_1_bool = False
+                            if ascii_minute == hora_2 and hora_2_bool == True:
+                                enviar = True
+                                hora_2_bool = False
+                            if ascii_minute == hora_3 and hora_3_bool == True:
+                                enviar = True
+                                hora_3_bool = False
+                            if ascii_minute == hora_4 and hora_4_bool == True:
+                                enviar = True
+                                hora_4_bool = False
+                            if ascii_minute == hora_5 and hora_5_bool == True:
+                                enviar = True
+                                hora_5_bool = False
+                        if enviar  == True:
+                            send_historicals(Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
+                            Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
+                            Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
+                            Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
+                            wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes)                 
+                    
+                    #calculate historical wind direction
+                    predominant_directions_count[dir_wind] += 1
+                    most_common_direction = max(predominant_directions_count, key=predominant_directions_count.get)
+                    #print("Dirección del viento más frecuente:", most_common_direction)
+                    highest_value = predominant_directions_count[most_common_direction]
+                    
+                    #restart direction
+                    if ascii_minute == 00:
+                        predominant_directions_count = {
+                        "NORTE": 0,
+                        "ESTE": 0,
+                        "SUR": 0,
+                        "OESTE": 0,
+                        "NE": 0,
+                        "NNE": 0,
+                        "ESE": 0,
+                        "SE": 0,
+                        "SSE": 0,
+                        "SSO": 0,
+                        "SO": 0,
+                        "OSO": 0,
+                        "ONO": 0,
+                        "NO": 0,
+                        }
+                    utime.sleep(.5)
+                    try: #encendido virtual
+                        if encendido_virtual == True:
+                            if Gps_active == True:
+                                
+                                if most_common_direction != last_wind_directions:
+                                    last_wind_directions = most_common_direction
+                                    print("guardando")
+                                    try:
+                                        with open('/Max_min.txt', 'r') as file:
+                                            historical = eval(file.read())
+                                        
+                                        historical["Direccion de viento predominante"] = dir_wind
+                                        with open('/Max_min.txt', 'w') as file:
+                                            file.write(str(historical))
+                                            
+                                    except (OSError, SyntaxError):
+                                        # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+                                        historical = {}
+                                
+                                #Historicals Max
+                                if temperature > Max_temp:      
+                                    Change_historical("Maximo temperatura", temperature,"Tiempo Maximo temperatura",timeUTC)
+                                    Max_temp = temperature
+                                    
+                                if humidity > Max_Hum:
+                                    Change_historical("Maximo humedad" , humidity ,"Tiempo Maximo humedad", timeUTC )
+                                    Max_Hum = humidity
+                                    
+                                if pressure > Max_pressure:
+                                    Change_historical("Maximo presion" , pressure,"Tiempo Maximo presion",timeUTC)
+                                    Max_pressure = pressure
+                                           
+                                if lum > Max_ligth:
+                                    Change_historical("Maximo luz", lum,"Tiempo Maximo luz",timeUTC)
+                                    Max_ligth = lum
+                                 
+                                if rain_data > Max_rain:
+                                    Change_historical("Maximo lluvia", rain_data, "Tiempo Maximo lluvia",timeUTC)
+                                    Max_rain = rain_data
+                                     
+                                if SpeedReal_ > Max_Speed:
+                                    Change_historical("Maximo viento", SpeedReal_,"Tiempo Maximo viento",timeUTC)
+                                    Max_Speed = SpeedReal_
+
+                                #Historicals MIN
+                                if temperature < Min_temp:
+                                    Change_historical("Minimo temperatura" ,temperature , "Tiempo Minimo temperatura" , timeUTC )
+                                    Min_temp = temperature
+                                    
+                                if humidity < Min_Hum:
+                                    Change_historical("Minimo humedad" , humidity ,"Tiempo Minimo humedad", timeUTC )
+                                    Min_Hum = humidity
+                                    
+                                if pressure < Min_pressure:
+                                    Change_historical("Minimo presion" , pressure,"Tiempo Minimo presion",timeUTC)
+                                    Min_pressure = pressure
+                                           
+                                if lum < Min_ligth:
+                                    Change_historical("Minimo luz", lum,"Tiempo Minimo luz",timeUTC)
+                                    Min_ligth = lum
+                                 
+                                if rain_data < Min_rain:
+                                    Change_historical("Minimo lluvia", rain_data, "Tiempo Minimo lluvia",timeUTC)
+                                    Min_rain = rain_data
+                                    
+                                if SpeedReal_ < Min_Speed:
+                                    Change_historical("Minimo viento", SpeedReal_,"Tiempo Minimo viento",timeUTC)
+                                    Min_Speed = SpeedReal_
+                    except Exception as e:
+                        print(f"An exception occurred historicals: {e}")
+                        #print("se tiene coordinador ")
         else:
             if contador_mac >= 16:
                 contador_mac = 0
@@ -834,306 +1233,12 @@ while True:
                 search_coordinador()
                 consular_mac = True
             contador_mac+=1
-                
-        data = Data_received(Coordinador)  
-        if consular_mac == True:
-            Coordinador = get_mac()
-            consular_mac = False
+            if isinstance(data,bytearray) and len(data) == 10 and data[9] == 0x44:
+                Coordinador = data
+                print("llego la mac")
            
-        byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
         
-        print(data)
         
-        if isinstance(data,bytearray) and len(data) == 6: #check data list of bytes 3hrs
-            print("tiene las horas", data)
-            comando_1h = False
-            comando_3hrs = True
-            comando_5hrs = False
-            hora_1_bool = True
-            hora_2_bool = True
-            hora_3_bool = True
-            hora1 = data[0:2]
-            hora_1  = int(hora1.decode('ascii'))
-            hora2 = data[2:4]
-            hora_2  = int(hora2.decode('ascii'))
-            hora3 = data[4:6]
-            hora_3  = int(hora3.decode('ascii'))
-            
-        if isinstance(data,bytearray) and len(data) == 10: #check data list of bytes 10hrs
-            comando_5hrs = True
-            comando_3hrs = False
-            comando_1h = False
-            hora_1_bool = True
-            hora_2_bool = True
-            hora_3_bool = True
-            hora_4_bool = True
-            hora_5_bool = True
-            hora1 = data[0:2]
-            hora_1  = int(hora1.decode('ascii'))
-            hora2 = data[2:4]
-            hora_2  = int(hora2.decode('ascii'))
-            hora3 = data[4:6]
-            hora_3  = int(hora3.decode('ascii'))
-            hora4 = data[6:8]
-            hora_4  = int(hora4.decode('ascii'))
-            hora5 = data[8:10]
-            hora_5  = int(hora5.decode('ascii'))
-        
-        #Wind direccion
-        wind_dir = machine.ADC(27)
-        dir_wind = ""
-        wind = round((wind_dir.read_u16() * 3.3) / 1000, 1)
-        wind_directions = [
-            ("NORTE", 189.2, 194.8),
-            ("ESTE", 83.4, 86.91),
-            ("SUR", 119.8, 126.2),
-            ("OESTE", 205.5, 210.9),
-            ("NE", 147.7, 151.4),
-            ("NNE", 136.3, 143.5),
-            ("ESE", 78.2, 85.2),
-            ("SE", 101.1, 109.0),
-            ("SSE", 90.5, 96.2),
-            ("SSO", 112.5, 116.8),
-            ("SO", 170.3, 177.8),
-            ("OSO", 167.0, 169.6),
-            ("ONO", 194.5, 197.1),
-            ("NO", 201.6, 205.4),
-            ("NO", 180.7, 201.3),
-            ]
-        
-        # Inicializa la dirección del viento como vacía
-        dir_wind = ""
-
-        # Itera sobre los rangos y asigna la dirección del viento
-        for direction, lower, upper in wind_directions:
-            if lower <= wind <= upper:
-                dir_wind = direction
-                break
-        
-        rain_drop = rain_drop_sensor.read_u16()
-        if rain_drop >= 60001:
-            count = 0
-            
-        #rain sensor
-        rain_sensor = Button(8)
-        rain_sensor.when_pressed = bucket_tipped
-        rain = count * BUCKET_SIZE
-        str_rain = str(rain)
-        str_pRain = str_rain + 'mm/'
-        rain_data = (int(rain*100))
-        rain_bytes = ustruct.pack('H', rain_data)
-            
-        #Speed Wind sensor Start       
-        wind_count = 0
-        time.sleep(wind_interval)
-        spdCstr = str(calculate_speed(wind_interval))
-        speedC = spdCstr + 'Kmh/'
-        speedReal = calculate_speed(wind_interval)
-        SpeedReal_ = (int(speedReal*100))
-        Speed_bytes = ustruct.pack('H', SpeedReal_)
-        
-        #Altura
-        mpl = MPL3115A2(i2cmpl, mode=MPL3115A2.ALTITUDE) 
-        alt = int((mpl.altitude() * -1) * 100) # h = (((101326 / sensor_pres) ** (1/5.257)) - 1) * 44330.8
-        altBytes = ustruct.pack('H', alt)
-            
-        #dir wind
-        dir_wind_ = (int(wind*100))
-        dir_wind_Bytes = ustruct.pack('H', dir_wind_)
-        
-        #temperature °C
-        temperature = (int(si7021.temperature()) * 100)
-        tempCBytes = ustruct.pack('H', temperature)
-        
-        #temperature °F
-        temperatureF = int((si7021.temperature() * 9/5 + 32) * 100)
-        tempFBytes = ustruct.pack('H',temperatureF)
-        
-        #humity
-        humidity = int(si7021.humidity() * 100)
-        humBytes = ustruct.pack('H', humidity)
-        
-        #Ligth
-        sensor_luz = machine.ADC(26)
-        eficacia_luz = 90
-        reading = sensor_luz.read_u16()
-        corriente = (reading / 10000)
-        lum = int((corriente * eficacia_luz)*100)
-        lumBytes = ustruct.pack('H',lum)
-        
-        #pressure
-        mpl2 = MPL3115A2(i2cmpl, mode=MPL3115A2.PRESSURE)
-        sensor_pres = mpl2.pressure()
-        pressure =  int((sensor_pres)*100)
-        pressureBytes = ustruct.pack('I',pressure)
-        
-        #request data  to GPS
-        byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
-        utime.sleep(.5)
-        
-        enviar = False #control de envio
-        
-        if data == "send":
-            if Gps_active == False : #time config 0x50 = 80
-                Send_Sensors_GPS(tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes)
-            #send data
-            if Gps_active == True:
-                enviar = True
-                print("enviando historicos")
-        
-        if Gps_active == True:
-            try:
-                ascii_minute = int(''.join(filter(str.isdigit, byte_minuto.decode('ascii'))))
-            except ValueError as e:
-                print("Error converting byte_minuto to integer:", e)
-                
-            current_time =  ascii_minute 
-            if data == "1hr":
-                comando_1h = True
-                comando_3hrs = False
-                comando_5hrs = False
-                last_time =  ascii_minute - 1
-                
-            if current_time == 0: #change 23 -> 00
-                last_time = 0
-                
-            if comando_1h == True:
-                print("now ",current_time)
-                print("last",last_time)
-                print(current_time - last_time)
-                if current_time - last_time == 1:
-                    enviar = True
-                    last_time = current_time
-                    print("send every hour")
-                    
-            if comando_3hrs == True:
-                if ascii_minute == hora_1 and hora_1_bool == True:
-                    enviar = True
-                    hora_1_bool = False
-                if ascii_minute == hora_2 and hora_2_bool == True:
-                    enviar = True
-                    hora_2_bool = False
-                if ascii_minute == hora_3 and hora_3_bool == True:
-                    enviar = True
-                    hora_3_bool = False
-                    
-            if comando_5hrs == True:
-                if ascii_minute == hora_1 and hora_1_bool == True:
-                    enviar = True
-                    hora_1_bool = False
-                if ascii_minute == hora_2 and hora_2_bool == True:
-                    enviar = True
-                    hora_2_bool = False
-                if ascii_minute == hora_3 and hora_3_bool == True:
-                    enviar = True
-                    hora_3_bool = False
-                if ascii_minute == hora_4 and hora_4_bool == True:
-                    enviar = True
-                    hora_4_bool = False
-                if ascii_minute == hora_5 and hora_5_bool == True:
-                    enviar = True
-                    hora_5_bool = False
-            if enviar  == True:
-                send_historicals(Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
-                Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
-                Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
-                Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
-                wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes)                 
-        
-        #calculate historical wind direction
-        predominant_directions_count[dir_wind] += 1
-        most_common_direction = max(predominant_directions_count, key=predominant_directions_count.get)
-        #print("Dirección del viento más frecuente:", most_common_direction)
-        highest_value = predominant_directions_count[most_common_direction]
-        
-        #restart direction
-        if ascii_minute == 00:
-            predominant_directions_count = {
-            "NORTE": 0,
-            "ESTE": 0,
-            "SUR": 0,
-            "OESTE": 0,
-            "NE": 0,
-            "NNE": 0,
-            "ESE": 0,
-            "SE": 0,
-            "SSE": 0,
-            "SSO": 0,
-            "SO": 0,
-            "OSO": 0,
-            "ONO": 0,
-            "NO": 0,
-            }
-        try: #encendido virtual
-            if Gps_active == True:
-                if encendido_virtual == True:
-                    
-                    if most_common_direction != last_wind_directions:
-                        last_wind_directions = most_common_direction
-                        print("guardando")
-                        try:
-                            with open('/Max_min.txt', 'r') as file:
-                                historical = eval(file.read())
-                            
-                            historical["Direccion de viento predominante"] = dir_wind
-                            with open('/Max_min.txt', 'w') as file:
-                                file.write(str(historical))
-                                
-                        except (OSError, SyntaxError):
-                            # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
-                            historical = {}
-                    
-                    #Historicals Max
-                    if temperature > Max_temp:      
-                        Change_historical("Maximo temperatura", temperature,"Tiempo Maximo temperatura",timeUTC)
-                        Max_temp = temperature
-                        
-                    if humidity > Max_Hum:
-                        Change_historical("Maximo humedad" , humidity ,"Tiempo Maximo humedad", timeUTC )
-                        Max_Hum = humidity
-                        
-                    if pressure > Max_pressure:
-                        Change_historical("Maximo presion" , pressure,"Tiempo Maximo presion",timeUTC)
-                        Max_pressure = pressure
-                               
-                    if lum > Max_ligth:
-                        Change_historical("Maximo luz", lum,"Tiempo Maximo luz",timeUTC)
-                        Max_ligth = lum
-                     
-                    if rain_data > Max_rain:
-                        Change_historical("Maximo lluvia", rain_data, "Tiempo Maximo lluvia",timeUTC)
-                        Max_rain = rain_data
-                         
-                    if SpeedReal_ > Max_Speed:
-                        Change_historical("Maximo viento", SpeedReal_,"Tiempo Maximo viento",timeUTC)
-                        Max_Speed = SpeedReal_
-
-                    #Historicals MIN
-                    if temperature < Min_temp:
-                        Change_historical("Minimo temperatura" ,temperature , "Tiempo Minimo temperatura" , timeUTC )
-                        Min_temp = temperature
-                        
-                    if humidity < Min_Hum:
-                        Change_historical("Minimo humedad" , humidity ,"Tiempo Minimo humedad", timeUTC )
-                        Min_Hum = humidity
-                        
-                    if pressure < Min_pressure:
-                        Change_historical("Minimo presion" , pressure,"Tiempo Minimo presion",timeUTC)
-                        Min_pressure = pressure
-                               
-                    if lum < Min_ligth:
-                        Change_historical("Minimo luz", lum,"Tiempo Minimo luz",timeUTC)
-                        Min_ligth = lum
-                     
-                    if rain_data < Min_rain:
-                        Change_historical("Minimo lluvia", rain_data, "Tiempo Minimo lluvia",timeUTC)
-                        Min_rain = rain_data
-                        
-                    if SpeedReal_ < Min_Speed:
-                        Change_historical("Minimo viento", SpeedReal_,"Tiempo Minimo viento",timeUTC)
-                        Min_Speed = SpeedReal_
-        except Exception as e:
-            print(f"An exception occurred historicals: {e}")             
     except Exception as e:
                 print(f"An exception occurred in general code: {e}")
         
