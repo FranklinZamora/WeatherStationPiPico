@@ -146,6 +146,7 @@ def calculate_speed(time_sec):
     return kmperhour * Adjustment
 
 def Alertas(sets):
+    print("in alerts")
     print(len(sets))
     temperatura_min = bytearray(2)
     temperatura_min[0] = sets[0]
@@ -203,7 +204,23 @@ def Alertas(sets):
     
     print(f" min_temp {temperatura_min_}  max_temp {temperatura_max_} \n min_hum {humedad_min_} max_hum {humedad_max_}")
     print(f"min_pressure {pressure_min_} max_pressure {pressure_max_}\n min_speed_wind {speed_wind_min_} max_speed_wind {speed_wind_max_}")
-    print(f"rain_min_ {rain_min_} rain_max_ {rain_max_}")    
+    print(f"rain_min_ {rain_min_} rain_max_ {rain_max_}")
+    
+    list_set_points = [temperatura_min_, temperatura_max_, humedad_min_, humedad_max_, pressure_min_, pressure_max_, speed_wind_min_, speed_wind_max_, rain_min_, rain_max_]
+    
+    try:
+        with open('/Max_min.txt', 'r') as file:
+            historical = eval(file.read())
+        historical["limites"] = list_set_points
+        with open('/Max_min.txt', 'w') as file:
+            file.write(str(historical))
+
+    except (OSError, SyntaxError):
+        # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+        historical = {}
+    utime.sleep(.2)
+    
+    return "Check_Set_points"
 
 def get_historicals():
     try:
@@ -239,7 +256,11 @@ def get_historicals():
             "Tiempo Minimo viento": '00:00:00',
             "Direccion de viento predominante": "",
             "Encendido virtual": False,
-            "Sensores Activos": ""
+            "Sensores Activos": "",
+            "Set points": "",
+            "Configuracion de envio": "",
+            "tiempos de envio" : [0],
+            "limites": [0]
         }
 
         # Guarda el diccionario inicial en el archivo
@@ -276,13 +297,17 @@ def get_historicals():
     wind_direction = contadores.get("Direccion de viento predominante", "")
     encendido_virtual = contadores.get("Encendido virtual", False)
     Sensors_on = contadores.get("Sensores Activos", "")
+    Set_points = contadores.get("Set points", "")
+    Config_time_of_send = contadores.get("Configuracion de envio", "")
+    time_send = contadores.get("tiempos de envio",[0])
+    limits = contadores.get("limites",[0])
     
     return (
         Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
         Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
         Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
         Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
-        wind_direction,encendido_virtual,Sensors_on #return encendido virtual
+        wind_direction,encendido_virtual,Sensors_on,Set_points, Config_time_of_send, time_send, limits #return encendido virtual
             )
 def change_dir(Sensor_name,Sensor_data):
     try:
@@ -388,13 +413,14 @@ def Data_received(Coordinador, Sensors_on):
                     with open('/Max_min.txt', 'w') as file:
                         file.write(str(historical))
                         
-                    frame_H[2] = 0x18 #adjust length
+                    frame_H[2] = 0x13 #adjust length
                     frame_H[18] = 0x54
-                    frame_H[19] = 0X03
-                    frame_H[20] = 0XB3
-                    frame_H[21] = 0x00
+                    frame_H[19] = 0X4F
+                    frame_H[20] = 0X4E
+                    frame_H[21] = 0X0B
+                    frame_H[22] = 0x00
                     checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[21] = checksum_gps
+                    frame_H[22] = checksum_gps
                     xbee.write(frame_H)
                     
                     return True
@@ -413,13 +439,15 @@ def Data_received(Coordinador, Sensors_on):
                     with open('/Max_min.txt', 'w') as file:
                         file.write(str(historical))
                         
-                    frame_H[2] = 0x18 #adjust length
+                    frame_H[2] = 0x14 #adjust length
                     frame_H[18] = 0x54
-                    frame_H[19] = 0X03
-                    frame_H[20] = 0XB3
-                    frame_H[21] = 0x00
+                    frame_H[19] = 0X4F
+                    frame_H[20] = 0X46
+                    frame_H[21] = 0X46
+                    frame_H[22] = 0XCD
+                    frame_H[23] = 0x00
                     checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[21] = checksum_gps
+                    frame_H[23] = checksum_gps
                     xbee.write(frame_H)
                         
                     return False
@@ -437,7 +465,7 @@ def Data_received(Coordinador, Sensors_on):
                     with open('/Max_min.txt', 'w') as file:
                         file.write(str(historical))
                         
-                    frame_H[2] = 0x18 #adjust length
+                    frame_H[2] = 0x12 #adjust length
                     frame_H[18] = 0x73
                     frame_H[19] = 0x4F
                     frame_H[20] = 0x4E
@@ -459,7 +487,7 @@ def Data_received(Coordinador, Sensors_on):
                     with open('/Max_min.txt', 'w') as file:
                         file.write(str(historical))
                     
-                    frame_H[2] = 0x18 #adjust length
+                    frame_H[2] = 0x14 #adjust length
                     frame_H[18] = 0x73
                     frame_H[19] = 0x4F
                     frame_H[20] = 0x4E
@@ -479,6 +507,14 @@ def Data_received(Coordinador, Sensors_on):
                     
                 if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x01:
                     print("\nmodo 1hr activo")
+                    try:
+                        with open('/Max_min.txt', 'r') as file:
+                            historical = eval(file.read())
+                        historical["Configuracion de envio"] = "1hr"
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                    except (OSError, SyntaxError):
+                        historical = {}
                     frame_H[2] = 0x18 #adjust length
                     frame_H[19] = 0x02
                     frame_H[20] = 0x01
@@ -488,9 +524,19 @@ def Data_received(Coordinador, Sensors_on):
                     xbee.write(frame_H)
                     
                     return "1hr"
+                    
                 if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x03:
                     print("\ncomando 3h")
                     hora = bytearray(6)
+                    try:
+                        with open('/Max_min.txt', 'r') as file:
+                            historical = eval(file.read())
+                        historical["Configuracion de envio"] = "3hr"
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                    except (OSError, SyntaxError):
+                        historical = {}
+                        
                     if len(hora) == 6:
                         hora[0] =  byte_array[19]
                         hora[1] =  byte_array[20]
@@ -514,10 +560,20 @@ def Data_received(Coordinador, Sensors_on):
                         xbee.write(frame_H)
                         
                         return hora
+                    
                         
                 if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x05:
                     hora = bytearray(10)
                     print("\nmodo 5hr activo")
+                    try:
+                        with open('/Max_min.txt', 'r') as file:
+                            historical = eval(file.read())
+                        historical["Configuracion de envio"] = "5hr"
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                    except (OSError, SyntaxError):
+                        historical = {}
+                        
                     if len(hora) == 10:
                         hora[0] =  byte_array[19]
                         hora[1] =  byte_array[20]
@@ -549,6 +605,7 @@ def Data_received(Coordinador, Sensors_on):
                         xbee.write(frame_H)
                         return hora
                     
+                    
                 if byte_array[16] == 0x62:
                     print("bateria")
                 if byte_array[16] == 0x70:
@@ -558,20 +615,64 @@ def Data_received(Coordinador, Sensors_on):
     #                 return "historicals"
                 if byte_array[16] == 0x52:
                     print("reset alarmas")
+                    
                 if byte_array[16] == 0x73 and byte_array[17] == 0x03:
                     print("send sensors")
                     return "send"
-                if byte_array[16] == 0x53 and byte_array[17] == 0x02:
+                
+                if byte_array[16] == 0x53 and byte_array[17] == 0x00:
                     print("set points desactivados")
+                    try:
+                        with open('/Max_min.txt', 'r') as file:
+                            historical = eval(file.read())
+                        
+                        historical["Set points"] = "Set_points_off"
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                    except (OSError, SyntaxError):
+                        historical = {}
+                    
+                    frame_H[2] = 0x13 #adjust length
+                    frame_H[18] = 0x53
+                    frame_H[19] = 0x4F
+                    frame_H[20] = 0X46
+                    frame_H[21] = 0X46
+                    frame_H[22] = 0x00
+                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                    frame_H[22] = checksum_gps
+                    xbee.write(frame_H)
+                    return "Set_points_off"
+                    
                 if byte_array[16] == 0x53 and byte_array[17] == 0x01:
                     print("set points activados")
+                    try:
+                        with open('/Max_min.txt', 'r') as file:
+                            historical = eval(file.read())
+                        
+                        historical["Set points"] = "Set_points_on"
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                    except (OSError, SyntaxError):
+                        historical = {}
+                    frame_H[2] = 0x12 #adjust length
+                    frame_H[18] = 0x53
+                    frame_H[19] = 0x4F
+                    frame_H[20] = 0X4E
+                    frame_H[21] = 0x00
+                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                    frame_H[21] = checksum_gps
+                    xbee.write(frame_H)
+                    
+                    return "Set_points_on"
+                    
                 if byte_array[16] == 0x53 and byte_array[17] == 0x02:
                     print("configurando setpoints")
                     set_points = bytearray(24) #length message
-                    set_points = bytearray(byte_array[17:41])
+                    set_points = byte_array[18:42]
+                    print(set_points[0] , "<-" )
                     
-                    if len(set_points) == 24:
-                        Alertas(set_points)
+                    print(set_points, len(set_points))
+                    return set_points
                 
     
 def search_coordinador():
@@ -858,7 +959,16 @@ print("Run")
 Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
 Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
 Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
-wind_direction,encendido_virtual, Sensors_on)  = get_historicals() #si 
+wind_direction,encendido_virtual, Sensors_on, Set_points, Config_time_of_send, time_send, limits)  = get_historicals() #si
+
+
+print("len lista ", limits , len(limits))
+
+if len(limits) >= 10:
+    temperatura_min_, temperatura_max_, humedad_min_, humedad_max_, pressure_min_, pressure_max_, speed_wind_min_, speed_wind_max_, rain_min_, rain_max_ = limits
+    print("temperatura i",temperatura_min_)
+    print("temperatura s",temperatura_max_)
+
 
 #predominant wind
 predominant_directions_count = {
@@ -902,6 +1012,8 @@ comando_3hrs = False
 comando_5hrs = False
 ascii_minute = 0
 
+first_send_hour == False
+
 last_wind_directions = ""
 
 contador_mac = 15
@@ -910,7 +1022,9 @@ while True:
     try:
         data = ""
         utime.sleep(1)
-        data = Data_received(Coordinador, Sensors_on)  
+        data = Data_received(Coordinador, Sensors_on)
+        
+        print("this data ",data)
         if consular_mac == True:
             Coordinador = get_mac()
             consular_mac = False
@@ -920,9 +1034,14 @@ while True:
                 contador_mac = 0
                 byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
             
-                if isinstance(data,bool):
+                if isinstance(data,bool) :
                     encendido_virtual = data
                     print("se envio un encendido")
+                if isinstance(data,list) and len(data) >= 18 and Set_points == "Set_points_on" :
+                    Alertas(data)
+                    print("me llego set points")
+                if isinstance(data,list) and len(data) >= 18 and Set_points == "Set_points_off" :
+                    print("Set points desabilitados ")
                 
                 if isinstance(data,bytearray) and len(data) == 6: #check data list of bytes 3hrs
                     print("tiene las horas", data)
@@ -938,6 +1057,33 @@ while True:
                     hora_2  = int(hora2.decode('ascii'))
                     hora3 = data[4:6]
                     hora_3  = int(hora3.decode('ascii'))
+                    
+                    try:
+                        with open('/Max_min.txt', 'r') as file:
+                            historical = eval(file.read())
+                        historical["Sensores Activos"] = "3hr"
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                        with open('/Max_min.txt', 'r') as file:
+                            historical["tiempos de envio"] = [hora_1,hora_2,hora_3]
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                    except (OSError, SyntaxError):
+                        # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+                        historical = {}
+                        
+                if Config_time_of_send == "3hr" and len(time_send) == 3:
+                    print("entrando desde la flash")
+                    comando_1h = False
+                    comando_3hrs = True
+                    comando_5hrs = False
+                    hora_1_bool = True
+                    hora_2_bool = True
+                    hora_3_bool = True
+                    Config_time_of_send = "0hr"
+                    hora_1  = time_send[0]
+                    hora_2  = time_send[1]
+                    hora_3  = time_send[2]
                     
                 if isinstance(data,bytearray) and len(data) == 10: #check data list of bytes 10hrs
                     comando_5hrs = True
@@ -958,11 +1104,44 @@ while True:
                     hora_4  = int(hora4.decode('ascii'))
                     hora5 = data[8:10]
                     hora_5  = int(hora5.decode('ascii'))
+                    try:
+                        with open('/Max_min.txt', 'r') as file:
+                            historical = eval(file.read())
+                        historical["Sensores Activos"] = "5hr"
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                        with open('/Max_min.txt', 'r') as file:
+                            historical["tiempos de envio"] = [hora_1,hora_2,hora_3,hora_4,hora_5]
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                    except (OSError, SyntaxError):
+                        # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+                        historical = {}
+                        
+                if Config_time_of_send == "5hr" and len(time_send) == 5:
+                    print("entrando desde la flash")
+                    comando_5hrs = True
+                    comando_3hrs = False
+                    comando_1h = False
+                    hora_1_bool = True
+                    hora_2_bool = True
+                    hora_3_bool = True
+                    hora_4_bool = True
+                    hora_5_bool = True
+                    hora_1  = time_send[0]
+                    hora_2  = time_send[1]
+                    hora_3  = time_send[2]
+                    hora_4  = time_send[3]
+                    hora_5  = time_send[4]
+                    Config_time_of_send = "0hr"
                 
                 if data == "Sensors_on" or data == "Sensors_off":
                     Sensors_on = data
                     
-                print(Sensors_on)
+                if data == "Set_points_off" or data == "Set_points_on":
+                    Set_points = data
+                    
+                #print(Sensors_on)
                 
                 if Sensors_on == "Sensors_on":
                     #Wind direccion
@@ -1057,6 +1236,11 @@ while True:
                     byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
                     utime.sleep(.5)
                     
+                    if Set_points == "Set_points_on":
+                        print("set points activos")
+                    if Set_points == "Set_points_off":
+                        print("set points desactivados")
+                    
                     enviar = False #control de envio
                     
                     print(encendido_virtual, " encendido virtual")
@@ -1076,14 +1260,19 @@ while True:
                             print("Error converting byte_minuto to integer:", e)
                             
                         current_time =  ascii_minute 
-                        if data == "1hr":
+                        if data == "1hr" or Config_time_of_send == "1hr":
                             comando_1h = True
                             comando_3hrs = False
                             comando_5hrs = False
                             last_time =  ascii_minute - 1
                             
                         if current_time == 0: #change 23 -> 00
-                            last_time = -1 #0
+                            last_time = 0 #0
+                        if current_time == 23:
+                            first_send_hour = False
+                        if current_time == 0 and last_time ==0 and first_send_hour == False:
+                            enviar = True
+                            first_send_hour = True
                             
                         if comando_1h == True:
                             print("now ",current_time)
@@ -1094,7 +1283,7 @@ while True:
                                 last_time = current_time
                                 print("send every hour")
                                 
-                        if comando_3hrs == True:
+                        if comando_3hrs == True or Config_time_of_send == "3hr":
                             if ascii_minute == hora_1 and hora_1_bool == True:
                                 enviar = True
                                 hora_1_bool = False
@@ -1121,6 +1310,7 @@ while True:
                             if ascii_minute == hora_5 and hora_5_bool == True:
                                 enviar = True
                                 hora_5_bool = False
+                                
                         if enviar  == True:
                             send_historicals(Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
                             Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
