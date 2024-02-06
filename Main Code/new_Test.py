@@ -22,7 +22,7 @@ count = 0
 
 #uart
 xbee = UART(0, 9600)
-gps = machine.UART(1, 115200)
+gps = machine.UART(1, 9600)
 my_gps = MicropyGPS()
 
 #I2C Start
@@ -202,11 +202,21 @@ def Alertas(sets):
     rain_max[1] = sets[23]
     rain_max_ = int.from_bytes(rain_max, 'big')
     
+    ligth_min = bytearray(2)
+    ligth_min[0] = sets[24]
+    ligth_min[1] = sets[25]
+    ligth_min_ = int.from_bytes(ligth_min, 'big')
+    
+    ligth_max = bytearray(2)
+    ligth_max[0] = sets[26]
+    ligth_max[1] = sets[27]
+    ligth_max_ = int.from_bytes(ligth_max, 'big')
+    
     print(f" min_temp {temperatura_min_}  max_temp {temperatura_max_} \n min_hum {humedad_min_} max_hum {humedad_max_}")
     print(f"min_pressure {pressure_min_} max_pressure {pressure_max_}\n min_speed_wind {speed_wind_min_} max_speed_wind {speed_wind_max_}")
     print(f"rain_min_ {rain_min_} rain_max_ {rain_max_}")
     
-    list_set_points = [temperatura_min_, temperatura_max_, humedad_min_, humedad_max_, pressure_min_, pressure_max_, speed_wind_min_, speed_wind_max_, rain_min_, rain_max_]
+    list_set_points = [temperatura_min_, temperatura_max_, humedad_min_, humedad_max_, pressure_min_, pressure_max_, speed_wind_min_, speed_wind_max_, rain_min_, rain_max_, ligth_min, ligth_max_]
     
     try:
         with open('/Max_min.txt', 'r') as file:
@@ -257,7 +267,7 @@ def get_historicals():
             "Direccion de viento predominante": "",
             "Encendido virtual": False,
             "Sensores Activos": "",
-            "Set points": "",
+            "Set points": "",		
             "Configuracion de envio": "",
             "tiempos de envio" : [0],
             "limites": [0]
@@ -266,7 +276,6 @@ def get_historicals():
         # Guarda el diccionario inicial en el archivo
         with open('/Max_min.txt', 'w') as file:
             file.write(str(contadores))
- 
     Max_temp = contadores.get("Maximo temperatura", 0)  
     Max_Hum = contadores.get("Maximo humedad", 0)
     Max_pressure = contadores.get("Maximo presion", 0)
@@ -412,7 +421,8 @@ def Data_received(Coordinador, Sensors_on):
                     historical["Encendido virtual"] = True
                     with open('/Max_min.txt', 'w') as file:
                         file.write(str(historical))
-                        
+                   
+                   #frame response
                     frame_H[2] = 0x13 #adjust length
                     frame_H[18] = 0x54
                     frame_H[19] = 0X4F
@@ -503,7 +513,7 @@ def Data_received(Coordinador, Sensors_on):
                     historical = {}
                 
             
-            if Sensors_on == "Sensors_on":        
+            if Sensors_on == "Sensors_on":
                     
                 if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x01:
                     print("\nmodo 1hr activo")
@@ -667,8 +677,8 @@ def Data_received(Coordinador, Sensors_on):
                     
                 if byte_array[16] == 0x53 and byte_array[17] == 0x02:
                     print("configurando setpoints")
-                    set_points = bytearray(24) #length message
-                    set_points = byte_array[18:42]
+                    set_points = bytearray(28) #length message
+                    set_points = byte_array[18:46]
                     print(set_points[0] , "<-" )
                     
                     print(set_points, len(set_points))
@@ -954,21 +964,33 @@ def get_mac():
 
 #inicializacion variables de la flash
 print("Run")
-    
+
 (Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
 Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
 Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
 Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
 wind_direction,encendido_virtual, Sensors_on, Set_points, Config_time_of_send, time_send, limits)  = get_historicals() #si
+utime.sleep(.5)
 
 
 print("len lista ", limits , len(limits))
 
+active_limits = False
 if len(limits) >= 10:
-    temperatura_min_, temperatura_max_, humedad_min_, humedad_max_, pressure_min_, pressure_max_, speed_wind_min_, speed_wind_max_, rain_min_, rain_max_ = limits
+    temperatura_min_, temperatura_max_, humedad_min_, humedad_max_, pressure_min_, pressure_max_, speed_wind_min_, speed_wind_max_, rain_min_, rain_max_, ligth_min, ligth_max_ = limits
     print("temperatura i",temperatura_min_)
     print("temperatura s",temperatura_max_)
-
+    print("humedad i",humedad_min_)
+    print("humedad s",humedad_max_)
+    print("pressure i",pressure_min_)
+    print("presssure s",pressure_max_)
+    print("speed i",speed_wind_min_)
+    print("speed s",speed_wind_max_)
+    print("rain i",rain_min_)
+    print("rain s",rain_max_)
+    print("luz i",ligth_min)
+    print("luz s",ligth_max_)
+    active_limits = True
 
 #predominant wind
 predominant_directions_count = {
@@ -1012,11 +1034,13 @@ comando_3hrs = False
 comando_5hrs = False
 ascii_minute = 0
 
-first_send_hour == False
+first_send_hour = False
 
 last_wind_directions = ""
 
 contador_mac = 15
+
+Reset = True
 
 while True:
     try:
@@ -1037,10 +1061,10 @@ while True:
                 if isinstance(data,bool) :
                     encendido_virtual = data
                     print("se envio un encendido")
-                if isinstance(data,list) and len(data) >= 18 and Set_points == "Set_points_on" :
+                if isinstance(data,list) and len(data) >= 24 and Set_points == "Set_points_on" :
                     Alertas(data)
                     print("me llego set points")
-                if isinstance(data,list) and len(data) >= 18 and Set_points == "Set_points_off" :
+                if isinstance(data,list) and len(data) >= 24 and Set_points == "Set_points_off" :
                     print("Set points desabilitados ")
                 
                 if isinstance(data,bytearray) and len(data) == 6: #check data list of bytes 3hrs
@@ -1180,7 +1204,7 @@ while True:
                         count = 0
                         
                     #rain sensor
-                    rain_sensor = Button(8)
+                    rain_sensor = Button(8)#
                     rain_sensor.when_pressed = bucket_tipped
                     rain = count * BUCKET_SIZE
                     str_rain = str(rain)
@@ -1223,14 +1247,30 @@ while True:
                     eficacia_luz = 90
                     reading = sensor_luz.read_u16()
                     corriente = (reading / 10000)
-                    lum = int((corriente * eficacia_luz)*100)
+                    lum = int((corriente * eficacia_luz)) #  *100
                     lumBytes = ustruct.pack('H',lum)
                     
                     #pressure
                     mpl2 = MPL3115A2(i2cmpl, mode=MPL3115A2.PRESSURE)
                     sensor_pres = mpl2.pressure()
-                    pressure =  int((sensor_pres)*100)
+                    pressure =  int((sensor_pres)) #*100
                     pressureBytes = ustruct.pack('I',pressure)
+                    
+                    print("this iss my max temp " , Max_temp)
+                    
+                    #Set points
+                    if active_limits == True:
+                        if temperature < temperatura_min_ or temperature > temperatura_max_:
+                            print("temperatura fuera de limites ")
+                        if humidity < humedad_min_ or humidity > humedad_max_:
+                            print("humedad fuera de limites ")
+                        if pressure < pressure_min_ or pressure > pressure_max_:
+                            print("presion fuera de limites ")
+                        #if lum <
+                        if SpeedReal_ < speed_wind_min_ or SpeedReal_ > speed_wind_max_:
+                            print("velocidad fuera de limites")
+                        if rain_data < rain_min_ or rain_data >rain_max_:
+                            print("lluvia fuera de limites")
                     
                     #request data  to GPS
                     byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
@@ -1259,12 +1299,66 @@ while True:
                         except ValueError as e:
                             print("Error converting byte_minuto to integer:", e)
                             
-                        current_time =  ascii_minute 
+                        current_time =  ascii_minute
+                        
+                        if current_time == 15 and Reset == True:
+                            print("restablecer flash**************/////**********")
+                            Reset = False
+                            try:
+                                with open('/Max_min.txt', 'w') as file:
+                                    file.write("")
+
+                            except (OSError, SyntaxError):
+                                # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+                                historical = {}
+                                
+                            encendido = False
+                            sensores_on = False
+                                
+                            if encendido_virtual == True:
+                                encendido = True
+                                
+                            if Sensors_on == "Sensors_on":
+                                sensores_on = True
+                                
+                            (Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
+                            Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
+                            Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
+                            Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
+                            wind_direction,encendido_virtual, Sensors_on, Set_points, Config_time_of_send, time_send, limits)  = get_historicals()
+                            
+                            if encendido == True :
+                                encendido_virtual = True
+                                print("\nEncendido virtual")
+                                try:
+                                    with open('/Max_min.txt', 'r') as file:
+                                        historical = eval(file.read())
+                                    
+                                    historical["Encendido virtual"] = True
+                                    with open('/Max_min.txt', 'w') as file:
+                                        file.write(str(historical))
+                                except (OSError, SyntaxError):
+                                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+                                    historical = {}
+                            
+                            if sensores_on == True:
+                                Sensors_on = "Sensors_on"
+                                try:
+                                    with open('/Max_min.txt', 'r') as file:
+                                        historical = eval(file.read())
+                                    historical["Sensores Activos"] = "Sensors_on"
+                                    with open('/Max_min.txt', 'w') as file:
+                                        file.write(str(historical))
+                                except (OSError, SyntaxError):
+                                    historical = {}
+                            
+                        
                         if data == "1hr" or Config_time_of_send == "1hr":
                             comando_1h = True
                             comando_3hrs = False
                             comando_5hrs = False
                             last_time =  ascii_minute - 1
+                            Config_time_of_send = "0hr" #restart loader
                             
                         if current_time == 0: #change 23 -> 00
                             last_time = 0 #0
@@ -1345,6 +1439,7 @@ while True:
                     utime.sleep(.5)
                     try: #encendido virtual
                         if encendido_virtual == True:
+                            print("estamos guardando en la flash")
                             if Gps_active == True:
                                 
                                 if most_common_direction != last_wind_directions:
@@ -1363,54 +1458,67 @@ while True:
                                         historical = {}
                                 
                                 #Historicals Max
-                                if temperature > Max_temp:      
+                                if temperature > Max_temp:      #put the var of time
                                     Change_historical("Maximo temperatura", temperature,"Tiempo Maximo temperatura",timeUTC)
                                     Max_temp = temperature
+                                    Time_Max_temp = timeUTC
                                     
                                 if humidity > Max_Hum:
                                     Change_historical("Maximo humedad" , humidity ,"Tiempo Maximo humedad", timeUTC )
                                     Max_Hum = humidity
+                                    Time_Max_Hum = timeUTC
                                     
                                 if pressure > Max_pressure:
                                     Change_historical("Maximo presion" , pressure,"Tiempo Maximo presion",timeUTC)
                                     Max_pressure = pressure
+                                    Time_Max_pressure = timeUTC
                                            
                                 if lum > Max_ligth:
                                     Change_historical("Maximo luz", lum,"Tiempo Maximo luz",timeUTC)
                                     Max_ligth = lum
+                                    Time_Max_ligth = timeUTC
                                  
                                 if rain_data > Max_rain:
                                     Change_historical("Maximo lluvia", rain_data, "Tiempo Maximo lluvia",timeUTC)
                                     Max_rain = rain_data
+                                    Time_Max_rain = timeUTC
                                      
                                 if SpeedReal_ > Max_Speed:
                                     Change_historical("Maximo viento", SpeedReal_,"Tiempo Maximo viento",timeUTC)
                                     Max_Speed = SpeedReal_
+                                    Time_Max_Speed = timeUTC
 
                                 #Historicals MIN
                                 if temperature < Min_temp:
                                     Change_historical("Minimo temperatura" ,temperature , "Tiempo Minimo temperatura" , timeUTC )
                                     Min_temp = temperature
+                                    Time_Min_temp = timeUTC
                                     
                                 if humidity < Min_Hum:
                                     Change_historical("Minimo humedad" , humidity ,"Tiempo Minimo humedad", timeUTC )
                                     Min_Hum = humidity
+                                    Time_Min_Hum = timeUTC
                                     
                                 if pressure < Min_pressure:
                                     Change_historical("Minimo presion" , pressure,"Tiempo Minimo presion",timeUTC)
                                     Min_pressure = pressure
+                                    Time_Min_pressure = timeUTC
                                            
                                 if lum < Min_ligth:
                                     Change_historical("Minimo luz", lum,"Tiempo Minimo luz",timeUTC)
                                     Min_ligth = lum
+                                    Time_Min_ligth = timeUTC
                                  
                                 if rain_data < Min_rain:
                                     Change_historical("Minimo lluvia", rain_data, "Tiempo Minimo lluvia",timeUTC)
                                     Min_rain = rain_data
+                                    Time_Min_rain = timeUTC
                                     
                                 if SpeedReal_ < Min_Speed:
                                     Change_historical("Minimo viento", SpeedReal_,"Tiempo Minimo viento",timeUTC)
                                     Min_Speed = SpeedReal_
+                                    Time_Min_Speed = timeUTC
+                                
                     except Exception as e:
                         print(f"An exception occurred historicals: {e}")
                         #print("se tiene coordinador ")
@@ -1426,10 +1534,10 @@ while True:
             if isinstance(data,bytearray) and len(data) == 10 and data[9] == 0x44:
                 Coordinador = data
                 print("llego la mac")
-           
+               
         
         
     except Exception as e:
-                print(f"An exception occurred in general code: {e}")
+        print(f"An exception occurred in general code: {e}")
         
 
