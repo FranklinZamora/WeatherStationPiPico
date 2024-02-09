@@ -7,9 +7,6 @@ from micropyGPS import MicropyGPS
 import ustruct
 import time, machine
 
-uart = machine.UART(1, 115200)
-my_gps = MicropyGPS()
-
 #Wind speed and Bucket size
 wind_count = 0
 radius_cm = 9.0
@@ -21,6 +18,7 @@ BUCKET_SIZE = 0.2794
 count = 0
 
 #uart
+uart = machine.UART(1, 115200)
 xbee = UART(0, 9600)
 gps = machine.UART(1, 9600)
 my_gps = MicropyGPS()
@@ -230,7 +228,7 @@ def Alertas(sets):
         historical = {}
     utime.sleep(.2)
     
-    return "Check_Set_points"
+    return list_set_points
 
 def get_historicals():
     try:
@@ -267,7 +265,7 @@ def get_historicals():
             "Direccion de viento predominante": "",
             "Encendido virtual": False,
             "Sensores Activos": "",
-            "Set points": "",		
+            "Set points": "",
             "Configuracion de envio": "",
             "tiempos de envio" : [0],
             "limites": [0]
@@ -383,11 +381,9 @@ def Data_received(Coordinador, Sensors_on):
                 # Write the mac string to a file
                 with open('M_flash.txt', 'w') as file:
                     file.write(mac_string)
-                    
                 return mac
             
-            
-        if all(Coordinador[i] == byte_array[i + 4] for i in range(8)) and byte_array[15] == 0x45:
+        if all(Coordinador[i] == byte_array[i + 4] for i in range(8)) and byte_array[15] == 0x45: 
             
             frame_H = bytearray(120)
             
@@ -514,6 +510,27 @@ def Data_received(Coordinador, Sensors_on):
                 
             
             if Sensors_on == "Sensors_on":
+                
+                if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x0A:
+                    print("\nModo detener formato horas")
+                    try:
+                        with open('/Max_min.txt', 'r') as file:
+                            historical = eval(file.read())
+                        historical["Configuracion de envio"] = "N_hours"
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                    except (OSError, SyntaxError):
+                        historical = {}
+                    frame_H[2] = 0x12 #adjust length
+                    frame_H[19] = 0x02
+                    frame_H[20] = 0x0A
+                    frame_H[21] = 0x00
+                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                    frame_H[21] = checksum_gps
+                    xbee.write(frame_H)
+                    
+                    return "N_hours"
+                
                     
                 if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x01:
                     print("\nmodo 1hr activo")
@@ -525,7 +542,7 @@ def Data_received(Coordinador, Sensors_on):
                             file.write(str(historical))
                     except (OSError, SyntaxError):
                         historical = {}
-                    frame_H[2] = 0x18 #adjust length
+                    frame_H[2] = 0x12 #adjust length
                     frame_H[19] = 0x02
                     frame_H[20] = 0x01
                     frame_H[21] = 0x00
@@ -682,6 +699,15 @@ def Data_received(Coordinador, Sensors_on):
                     print(set_points[0] , "<-" )
                     
                     print(set_points, len(set_points))
+                    frame_H[2] = 0x12 #adjust length
+                    frame_H[18] = 0x53
+                    frame_H[19] = 0x45
+                    frame_H[20] = 0X54
+                    frame_H[21] = 0x00
+                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                    frame_H[21] = checksum_gps
+                    xbee.write(frame_H)
+                    
                     return set_points
                 
     
@@ -690,6 +716,46 @@ def search_coordinador():
     #7E 00 0F 08 01 4E 44 43 6F 6F 72 64 69 6E 61 64 6F 72 F0
     search = bytes([0x7E, 0x00, 0x0F, 0x08, 0x01, 0x4E, 0x44, 0x43, 0x6F, 0x6F, 0x72, 0x64, 0x69, 0x6E, 0x61, 0x64, 0x6F, 0x72, 0xF0])
     xbee.write(search)
+    
+def send_alerts(sensor, Time):
+    Time_s, Time_m, Time_h = time_hex_historicals(Time)
+    
+    frame_alerts = bytearray(50)
+    
+    frame_alerts[0] = 0x7E #Start
+    frame_alerts[1] = 0x00 #length
+    frame_alerts[2] = 0x19
+    frame_alerts[3] = 0x10 #type
+    frame_alerts[4] = 0x01 #ID
+    frame_alerts[5] = 0x00 #MAC
+    frame_alerts[6] = 0x13
+    frame_alerts[7] = 0xA2
+    frame_alerts[8] = 0x00
+    frame_alerts[9] = 0x41
+    frame_alerts[10]= 0xEA
+    frame_alerts[11]= 0x56
+    frame_alerts[12]= 0x61 #END_MAC
+    frame_alerts[13]= 0xFF #address
+    frame_alerts[14]= 0xFE
+    frame_alerts[15]= 0x00 #broadcast
+    frame_alerts[16]= 0x00 #options
+    frame_alerts[17] = 0x45 #header E
+    frame_alerts[18] = 0x02
+    frame_alerts[19] = 0x53 #header set
+    frame_alerts[20] = 0x45 #temperatura
+    frame_alerts[21] = 0x6D #minimo
+    frame_alerts[22] = sensor[1]
+    frame_alerts[23] = sensor[0]
+    frame_alerts[24] = Time_h[0]
+    frame_alerts[25] = Time_h[1]
+    frame_alerts[26] = Time_m[0]
+    frame_alerts[27] = Time_m[1]
+    frame_alerts[28] = 0x00
+    checksum_gps = 0xFF - (sum(frame_alerts[3:-1]) % 256)
+    frame_alerts[28] = checksum_gps
+    xbee.write(frame_alerts)
+    
+    
 
 def send_historicals(Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
 Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
@@ -965,6 +1031,20 @@ def get_mac():
 #inicializacion variables de la flash
 print("Run")
 
+#globals
+temperatura_min_ = 0
+temperatura_max_ = 0
+humedad_min_ = 0
+humedad_max_ = 0
+pressure_min_ = 0
+pressure_max_ = 0
+speed_wind_min_ = 0
+speed_wind_max_ = 0
+rain_min_ = 0
+rain_max_ = 0
+ligth_min = 0
+ligth_max_ =0
+
 (Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
 Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
 Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
@@ -1042,6 +1122,9 @@ contador_mac = 15
 
 Reset = True
 
+#global alerts
+temperature_alart_M = True
+temperature_alart_m = True
 while True:
     try:
         data = ""
@@ -1062,10 +1145,12 @@ while True:
                     encendido_virtual = data
                     print("se envio un encendido")
                 if isinstance(data,list) and len(data) >= 24 and Set_points == "Set_points_on" :
-                    Alertas(data)
+                    active_limits = True
+                    temperatura_min_, temperatura_max_, humedad_min_, humedad_max_, pressure_min_, pressure_max_, speed_wind_min_, speed_wind_max_, rain_min_, rain_max_, ligth_min, ligth_max_ = Alertas(data)
                     print("me llego set points")
                 if isinstance(data,list) and len(data) >= 24 and Set_points == "Set_points_off" :
                     print("Set points desabilitados ")
+                    active_limits = False
                 
                 if isinstance(data,bytearray) and len(data) == 6: #check data list of bytes 3hrs
                     print("tiene las horas", data)
@@ -1158,6 +1243,12 @@ while True:
                     hora_4  = time_send[3]
                     hora_5  = time_send[4]
                     Config_time_of_send = "0hr"
+                    
+                if data == "N_hours" or Config_time_of_send == "N_hours":
+                    print("\nmodo sin envios programados")
+                    comando_1h = False
+                    comando_3hrs = False
+                    comando_5hrs = False
                 
                 if data == "Sensors_on" or data == "Sensors_off":
                     Sensors_on = data
@@ -1257,29 +1348,13 @@ while True:
                     pressureBytes = ustruct.pack('I',pressure)
                     
                     print("this iss my max temp " , Max_temp)
-                    
-                    #Set points
-                    if active_limits == True:
-                        if temperature < temperatura_min_ or temperature > temperatura_max_:
-                            print("temperatura fuera de limites ")
-                        if humidity < humedad_min_ or humidity > humedad_max_:
-                            print("humedad fuera de limites ")
-                        if pressure < pressure_min_ or pressure > pressure_max_:
-                            print("presion fuera de limites ")
-                        #if lum <
-                        if SpeedReal_ < speed_wind_min_ or SpeedReal_ > speed_wind_max_:
-                            print("velocidad fuera de limites")
-                        if rain_data < rain_min_ or rain_data >rain_max_:
-                            print("lluvia fuera de limites")
+                    print("******" , Set_points)
+                    print("------", active_limits)
+                   
                     
                     #request data  to GPS
                     byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
                     utime.sleep(.5)
-                    
-                    if Set_points == "Set_points_on":
-                        print("set points activos")
-                    if Set_points == "Set_points_off":
-                        print("set points desactivados")
                     
                     enviar = False #control de envio
                     
@@ -1301,7 +1376,10 @@ while True:
                             
                         current_time =  ascii_minute
                         
-                        if current_time == 15 and Reset == True:
+                        if current_time != 25 :
+                            Reset = True
+                        
+                        if current_time == 25 and Reset == True:
                             print("restablecer flash**************/////**********")
                             Reset = False
                             try:
@@ -1351,7 +1429,6 @@ while True:
                                         file.write(str(historical))
                                 except (OSError, SyntaxError):
                                     historical = {}
-                            
                         
                         if data == "1hr" or Config_time_of_send == "1hr":
                             comando_1h = True
@@ -1436,6 +1513,30 @@ while True:
                         "ONO": 0,
                         "NO": 0,
                         }
+                        
+                     #Set points
+                    if Set_points == "Set_points_on" and active_limits == True:
+                        print("set points activos __________-----------")
+                        if (temperature < temperatura_min_ or temperature > temperatura_max_) and temperature_alart_M == True:
+                            #timeUTC
+                            send_alerts(tempCBytes, timeUTC)
+                            temperature_alart_M = False
+                            print("temperatura max",temperatura_max_)
+                            print("temperatura min" , temperatura_min_)
+                            print(temperature)
+                            print("temperatura fuera de limites ")
+                        if humidity < humedad_min_ or humidity > humedad_max_:
+                            print("humedad fuera de limites ")
+                        if pressure < pressure_min_ or pressure > pressure_max_:
+                            print("presion fuera de limites ")
+                        #if lum <
+                        if SpeedReal_ < speed_wind_min_ or SpeedReal_ > speed_wind_max_:
+                            print("velocidad fuera de limites")
+                        if rain_data < rain_min_ or rain_data >rain_max_:
+                            print("lluvia fuera de limites")
+                    if Set_points == "Set_points_off":
+                        print("set points desactivados")
+                        
                     utime.sleep(.5)
                     try: #encendido virtual
                         if encendido_virtual == True:
