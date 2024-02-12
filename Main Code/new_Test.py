@@ -213,8 +213,9 @@ def Alertas(sets):
     print(f" min_temp {temperatura_min_}  max_temp {temperatura_max_} \n min_hum {humedad_min_} max_hum {humedad_max_}")
     print(f"min_pressure {pressure_min_} max_pressure {pressure_max_}\n min_speed_wind {speed_wind_min_} max_speed_wind {speed_wind_max_}")
     print(f"rain_min_ {rain_min_} rain_max_ {rain_max_}")
+    print(f"luzz min {ligth_min_} luz maxima {ligth_max_}")
     
-    list_set_points = [temperatura_min_, temperatura_max_, humedad_min_, humedad_max_, pressure_min_, pressure_max_, speed_wind_min_, speed_wind_max_, rain_min_, rain_max_, ligth_min, ligth_max_]
+    list_set_points = [temperatura_min_, temperatura_max_, humedad_min_, humedad_max_, pressure_min_, pressure_max_, speed_wind_min_, speed_wind_max_, rain_min_, rain_max_, ligth_min_, ligth_max_]
     
     try:
         with open('/Max_min.txt', 'r') as file:
@@ -717,7 +718,8 @@ def search_coordinador():
     search = bytes([0x7E, 0x00, 0x0F, 0x08, 0x01, 0x4E, 0x44, 0x43, 0x6F, 0x6F, 0x72, 0x64, 0x69, 0x6E, 0x61, 0x64, 0x6F, 0x72, 0xF0])
     xbee.write(search)
     
-def send_alerts(sensor, Time):
+def send_alerts(sensor, Time, type_sensor):
+    print("tamano de la lista de alertas" , len(sensor))
     Time_s, Time_m, Time_h = time_hex_historicals(Time)
     
     frame_alerts = bytearray(50)
@@ -742,8 +744,27 @@ def send_alerts(sensor, Time):
     frame_alerts[17] = 0x45 #header E
     frame_alerts[18] = 0x02
     frame_alerts[19] = 0x53 #header set
-    frame_alerts[20] = 0x45 #temperatura
-    frame_alerts[21] = 0x6D #minimo
+    
+    if type_sensor == "temperatureM":
+        frame_alerts[20] = 0x45 #temperatura
+        frame_alerts[21] = 0x4D #Maximo
+    if type_sensor == "temperaturem":
+        frame_alerts[20] = 0x45 #temperatura
+        frame_alerts[21] = 0x6D #Minimo
+    if type_sensor == "humityM":
+        frame_alerts[20] = 0x48 #Humedad
+        frame_alerts[21] = 0x4D #Maximo
+    if type_sensor == "humitym":
+        frame_alerts[20] = 0x48 #Humedad
+        frame_alerts[21] = 0x6D #Maximo
+    if type_sensor == "ligthM":
+        frame_alerts[20] = 0x4C
+        frame_alerts[21] = 0x4D #Maximo
+    if type_sensor == "ligthm":
+        frame_alerts[20] = 0x4C
+        frame_alerts[21] = 0x6D #Maximo
+        
+    #frame_alerts[21] = 0x6D #minimo
     frame_alerts[22] = sensor[1]
     frame_alerts[23] = sensor[0]
     frame_alerts[24] = Time_h[0]
@@ -1123,8 +1144,14 @@ contador_mac = 15
 Reset = True
 
 #global alerts
-temperature_alart_M = True
-temperature_alart_m = True
+temperature_alert_M = True
+temperature_alert_m = True
+humity_Alert_M = True
+humity_Alert_m = True
+ligth_Alert_M = True
+ligth_Alert_m = True
+
+
 while True:
     try:
         data = ""
@@ -1332,6 +1359,7 @@ while True:
                     #humity
                     humidity = int(si7021.humidity() * 100)
                     humBytes = ustruct.pack('H', humidity)
+                    print(f"humedad {humidity}")
                     
                     #Ligth
                     sensor_luz = machine.ADC(26)
@@ -1376,10 +1404,10 @@ while True:
                             
                         current_time =  ascii_minute
                         
-                        if current_time != 25 :
+                        if current_time != 2 :
                             Reset = True
-                        
-                        if current_time == 25 and Reset == True:
+                    
+                        if current_time == 2 and Reset == True:
                             print("restablecer flash**************/////**********")
                             Reset = False
                             try:
@@ -1390,6 +1418,9 @@ while True:
                                 # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
                                 historical = {}
                                 
+                            #reset alerts
+                            temperature_alert_M = True
+                                
                             encendido = False
                             sensores_on = False
                                 
@@ -1398,12 +1429,38 @@ while True:
                                 
                             if Sensors_on == "Sensors_on":
                                 sensores_on = True
+                            if Set_points == "Set_points_on":
+                                virtual_Set_points = Set_points
+                            else:
+                                virtual_Set_points = "Set_points_off"
+                            if active_limits == True:
+                                virtual_active_limits = True
+                            else :
+                                virtual_active_limits = False
+                            
                                 
                             (Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
                             Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
                             Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
                             Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
-                            wind_direction,encendido_virtual, Sensors_on, Set_points, Config_time_of_send, time_send, limits)  = get_historicals()
+                            wind_direction,encendido_virtual, Sensors_on, Set_points, Config_time_of_send, time_send, limits)  = get_historicals() #create json
+                            
+                            if virtual_active_limits == True:
+                                active_limits = virtual_active_limits
+                                
+                            
+                            if virtual_Set_points == "Set_points_on":
+                                Set_points = virtual_Set_points
+                                try:
+                                    with open('/Max_min.txt', 'r') as file:
+                                        historical = eval(file.read())
+                                    
+                                    historical["Set points"] = virtual_Set_points
+                                    with open('/Max_min.txt', 'w') as file:
+                                        file.write(str(historical))
+                                except (OSError, SyntaxError):
+                                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+                                    historical = {}
                             
                             if encendido == True :
                                 encendido_virtual = True
@@ -1413,6 +1470,17 @@ while True:
                                         historical = eval(file.read())
                                     
                                     historical["Encendido virtual"] = True
+                                    with open('/Max_min.txt', 'w') as file:
+                                        file.write(str(historical))
+                                except (OSError, SyntaxError):
+                                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+                                    historical = {}
+                                    
+                                try:
+                                    with open('/Max_min.txt', 'r') as file:
+                                        historical = eval(file.read())
+                                    
+                                    historical["limites"] = temperatura_min_, temperatura_max_, humedad_min_, humedad_max_, pressure_min_, pressure_max_, speed_wind_min_, speed_wind_max_, rain_min_, rain_max_, ligth_min, ligth_max_
                                     with open('/Max_min.txt', 'w') as file:
                                         file.write(str(historical))
                                 except (OSError, SyntaxError):
@@ -1517,22 +1585,40 @@ while True:
                      #Set points
                     if Set_points == "Set_points_on" and active_limits == True:
                         print("set points activos __________-----------")
-                        if (temperature < temperatura_min_ or temperature > temperatura_max_) and temperature_alart_M == True:
-                            #timeUTC
-                            send_alerts(tempCBytes, timeUTC)
-                            temperature_alart_M = False
-                            print("temperatura max",temperatura_max_)
-                            print("temperatura min" , temperatura_min_)
-                            print(temperature)
-                            print("temperatura fuera de limites ")
-                        if humidity < humedad_min_ or humidity > humedad_max_:
-                            print("humedad fuera de limites ")
-                        if pressure < pressure_min_ or pressure > pressure_max_:
-                            print("presion fuera de limites ")
-                        #if lum <
-                        if SpeedReal_ < speed_wind_min_ or SpeedReal_ > speed_wind_max_:
-                            print("velocidad fuera de limites")
-                        if rain_data < rain_min_ or rain_data >rain_max_:
+                        
+                        if (temperature < temperatura_min_) and temperature_alert_m == True:
+                            send_alerts(tempCBytes, timeUTC , "temperaturem")
+                            temperature_alert_m = False
+                        if (temperature > temperatura_max_) and temperature_alert_M == True:
+                            temperature_alert_M = False
+                            send_alerts(tempCBytes, timeUTC , "temperatureM")
+                            
+                        print(f"mi luz es {lum}")
+                        if (lum < ligth_min) and ligth_Alert_m == True:
+                             send_alerts(lumBytes, timeUTC , "ligthm")
+                             ligth_Alert_m = False
+                        if (lum > ligth_max_) and ligth_Alert_M == True:
+                            ligth_Alert_M = False
+                            send_alerts(lumBytes, timeUTC , "ligthM")
+                            
+                        if (humidity < humedad_min_)  and humity_Alert_m == True:
+                            send_alerts(humBytes, timeUTC , "humitym")
+                            humity_Alert_m = False
+                        if (humidity > humedad_max_) and humity_Alert_M == True:
+                            send_alerts(humBytes, timeUTC , "humityM")
+                            humity_Alert_M = False
+                            
+#                         if (humidity < humedad_min_ or humidity > humedad_max_) and humity_Alert_M == True:
+#                             print("humedad fuera de limites ")
+#                            # send_alerts(humidity, timeUTC)
+#                             humity_Alert_M = False
+#                             
+#                         if pressure < pressure_min_ or pressure > pressure_max_:
+#                             print("presion fuera de limites ")
+#                         #if lum <
+#                         if SpeedReal_ < speed_wind_min_ or SpeedReal_ > speed_wind_max_:
+#                             print("velocidad fuera de limites")
+#                         if rain_data < rain_min_ or rain_data >rain_max_:
                             print("lluvia fuera de limites")
                     if Set_points == "Set_points_off":
                         print("set points desactivados")
