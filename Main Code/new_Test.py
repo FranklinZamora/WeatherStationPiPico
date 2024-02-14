@@ -1119,7 +1119,7 @@ Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
 Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
 Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
 wind_direction,encendido_virtual, Sensors_on, Set_points, Config_time_of_send, time_send, limits)  = get_historicals() #si
-utime.sleep(.5)
+utime.sleep(1)
 
 
 print("len lista ", limits , len(limits))
@@ -1458,99 +1458,38 @@ while True:
                             
                         current_time =  ascii_minute
                         
-                        if current_time != 0 :
+                        if current_time != 2 :
                             Reset = True
                     
-                        if current_time == 0 and Reset == True:
+                        if current_time == 2 and Reset == True:
                             print("restablecer flash *******************************")
                             Reset = False
-                            try:
-                                with open('/Max_min.txt', 'w') as file:
-                                    file.write("")
-
-                            except (OSError, SyntaxError):
-                                # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
-                                historical = {}
-                                
-                            #reset alerts
+                            
+                            Max_temp = 0
+                            Max_Hum = 0
+                            Max_pressure = 0
+                            Max_ligth = 0
+                            Max_rain = 0
+                            Max_Speed = 0
+                            Min_temp = 1000000
+                            Min_Hum = 1000000
+                            Min_pressure = 10000000000
+                            Min_ligth = 1000000
+                            Min_rain = 1000000
+                            Min_Speed = 1000000
+                            
                             temperature_alert_M = True
-                                
-                            encendido = False
-                            sensores_on = False
-                                
-                            if encendido_virtual == True:
-                                encendido = True
-                                
-                            if Sensors_on == "Sensors_on":
-                                sensores_on = True
-                            if Set_points == "Set_points_on":
-                                virtual_Set_points = Set_points
-                            else:
-                                virtual_Set_points = "Set_points_off"
-                            if active_limits == True:
-                                virtual_active_limits = True
-                            else :
-                                virtual_active_limits = False
-                            
-                                
-                            (Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
-                            Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
-                            Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
-                            Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
-                            wind_direction,encendido_virtual, Sensors_on, Set_points, Config_time_of_send, time_send, limits)  = get_historicals() #create json
-                            
-                            if virtual_active_limits == True:
-                                active_limits = virtual_active_limits
-                                
-                            
-                            if virtual_Set_points == "Set_points_on":
-                                Set_points = virtual_Set_points
-                                try:
-                                    with open('/Max_min.txt', 'r') as file:
-                                        historical = eval(file.read())
-                                    
-                                    historical["Set points"] = virtual_Set_points
-                                    with open('/Max_min.txt', 'w') as file:
-                                        file.write(str(historical))
-                                except (OSError, SyntaxError):
-                                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
-                                    historical = {}
-                            
-                            if encendido == True :
-                                encendido_virtual = True
-                                print("\nEncendido virtual")
-                                try:
-                                    with open('/Max_min.txt', 'r') as file:
-                                        historical = eval(file.read())
-                                    
-                                    historical["Encendido virtual"] = True
-                                    with open('/Max_min.txt', 'w') as file:
-                                        file.write(str(historical))
-                                except (OSError, SyntaxError):
-                                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
-                                    historical = {}
-                                    
-                                try:
-                                    with open('/Max_min.txt', 'r') as file:
-                                        historical = eval(file.read())
-                                    
-                                    historical["limites"] = temperatura_min_, temperatura_max_, humedad_min_, humedad_max_, pressure_min_, pressure_max_, speed_wind_min_, speed_wind_max_, rain_min_, rain_max_, ligth_min, ligth_max_
-                                    with open('/Max_min.txt', 'w') as file:
-                                        file.write(str(historical))
-                                except (OSError, SyntaxError):
-                                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
-                                    historical = {}
-                            
-                            if sensores_on == True:
-                                Sensors_on = "Sensors_on"
-                                try:
-                                    with open('/Max_min.txt', 'r') as file:
-                                        historical = eval(file.read())
-                                    historical["Sensores Activos"] = "Sensors_on"
-                                    with open('/Max_min.txt', 'w') as file:
-                                        file.write(str(historical))
-                                except (OSError, SyntaxError):
-                                    historical = {}
+                            temperature_alert_m = True
+                            humity_Alert_M = True
+                            humity_Alert_m = True
+                            ligth_Alert_M = True
+                            ligth_Alert_m = True
+                            pressure_Alert_M = True
+                            pressure_Alert_m = True
+                            rain_Alert_m = True
+                            rain_Alert_M = True
+                            speed_Alert_M = True
+                            speed_Alert_m = True
                         
                         if data == "1hr" or Config_time_of_send == "1hr":
                             comando_1h = True
@@ -1618,7 +1557,7 @@ while True:
                     highest_value = predominant_directions_count[most_common_direction]
                     
                     #restart direction
-                    if ascii_minute == 00:
+                    if ascii_minute == 0:
                         predominant_directions_count = {
                         "NORTE": 0,
                         "ESTE": 0,
@@ -1646,8 +1585,6 @@ while True:
                         if (temperature > temperatura_max_) and temperature_alert_M == True:
                             temperature_alert_M = False
                             send_alerts(tempCBytes, timeUTC , "temperatureM")
-                            
-                        print(f"mi luz es {lum}")
                         if (lum < ligth_min) and ligth_Alert_m == True:
                              send_alerts(lumBytes, timeUTC , "ligthm")
                              ligth_Alert_m = False
@@ -1672,10 +1609,11 @@ while True:
                         if(rain_data > rain_max_) and rain_Alert_M == True:
                             send_alerts(rain_bytes, timeUTC , "rainM")
                             rain_Alert_M = False
+                        print(f"mi speed es {SpeedReal_}")
                         if (SpeedReal_ < speed_wind_min_ ) and speed_Alert_m == True:
                             send_alerts(Speed_bytes, timeUTC , "speedm")
                             speed_Alert_m = False
-                        if(rain_data > speed_wind_max_) and speed_Alert_M == True:
+                        if(SpeedReal_ > speed_wind_max_) and speed_Alert_M == True:
                             send_alerts(Speed_bytes, timeUTC , "speedM")
                             speed_Alert_M = False
                             print("lluvia fuera de limites")
@@ -1781,8 +1719,6 @@ while True:
             if isinstance(data,bytearray) and len(data) == 10 and data[9] == 0x44:
                 Coordinador = data
                 print("llego la mac")
-               
-        
         
     except Exception as e:
         print(f"An exception occurred in general code: {e}")
