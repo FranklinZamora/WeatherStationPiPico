@@ -508,7 +508,32 @@ def Data_received(Coordinador, Sensors_on):
                     return "Sensors_off"
                 except (OSError, SyntaxError):
                     historical = {}
+            if byte_array[16] == 0x62:
+                frame_H[2] = 0x12 # Ajustar longitud
+                frame_H[18] = 0x62
+                frame_H[19] = 0x04
+                frame_H[20] = 0x90
+                frame_H[21] = 0x00
+
+                checksum_ = 0xFF - (sum(frame_H[3:-1]) % 256)
+                frame_H[21] = checksum_
+
+                xbee.write(frame_H)
+
+                print("bateria")
+
                 
+                    
+            if byte_array[16] == 0x70:
+                print("panel")
+                frame_H[2] = 0x12 # Ajustar longitud
+                frame_H[18] = 0x70
+                frame_H[19] = 0x07
+                frame_H[20] = 0x08
+                frame_H[21] = 0x00
+                checksum_ = 0xFF - (sum(frame_H[3:-1]) % 256)
+                frame_H[21] = checksum_
+                xbee.write(frame_H)
             
             if Sensors_on == "Sensors_on":
                 
@@ -633,19 +658,11 @@ def Data_received(Coordinador, Sensors_on):
                         xbee.write(frame_H)
                         return hora
                     
-                    
-                if byte_array[16] == 0x62:
-                    print("bateria")
-                if byte_array[16] == 0x70:
-                    print("panel")
-    #             if byte_array[16] == 0x54 and byte_array[17] == 0x01:
-    #                 print("on gateway")
-    #                 return "historicals"
                 if byte_array[16] == 0x52:
                     print("reset alarmas")
                     
                 if byte_array[16] == 0x73 and byte_array[17] == 0x03:
-                    print("send sensors")
+                    print("\nsend sensors")
                     return "send"
                 
                 if byte_array[16] == 0x53 and byte_array[17] == 0x00:
@@ -744,25 +761,36 @@ def send_alerts(sensor, Time, type_sensor):
     frame_alerts[17] = 0x45 #header E
     frame_alerts[18] = 0x02
     frame_alerts[19] = 0x53 #header set
-    
     if type_sensor == "temperatureM":
-        frame_alerts[20] = 0x45 #temperatura
+        frame_alerts[20] = 0x45 #T
         frame_alerts[21] = 0x4D #Maximo
     if type_sensor == "temperaturem":
-        frame_alerts[20] = 0x45 #temperatura
+        frame_alerts[20] = 0x45 
         frame_alerts[21] = 0x6D #Minimo
     if type_sensor == "humityM":
-        frame_alerts[20] = 0x48 #Humedad
+        frame_alerts[20] = 0x48 #H
         frame_alerts[21] = 0x4D #Maximo
     if type_sensor == "humitym":
-        frame_alerts[20] = 0x48 #Humedad
+        frame_alerts[20] = 0x48 
         frame_alerts[21] = 0x6D #Maximo
     if type_sensor == "ligthM":
-        frame_alerts[20] = 0x4C
+        frame_alerts[20] = 0x4C #L
         frame_alerts[21] = 0x4D #Maximo
     if type_sensor == "ligthm":
-        frame_alerts[20] = 0x4C
-        frame_alerts[21] = 0x6D #Maximo
+        frame_alerts[20] = 0x4C 
+        frame_alerts[21] = 0x6D #Minimo
+    if type_sensor == "speedM":
+        frame_alerts[20] = 0x53 #S
+        frame_alerts[21] = 0x4D #Maximo
+    if type_sensor == "speedm":
+        frame_alerts[20] = 0x53 
+        frame_alerts[21] = 0x6D #Minimo
+    if type_sensor == "rainM":
+        frame_alerts[20] = 0x52 #R
+        frame_alerts[21] = 0x4D #Maximo
+    if type_sensor == "rainm":
+        frame_alerts[20] = 0x52 
+        frame_alerts[21] = 0x6D #Minimo
         
     #frame_alerts[21] = 0x6D #minimo
     frame_alerts[22] = sensor[1]
@@ -774,6 +802,26 @@ def send_alerts(sensor, Time, type_sensor):
     frame_alerts[28] = 0x00
     checksum_gps = 0xFF - (sum(frame_alerts[3:-1]) % 256)
     frame_alerts[28] = checksum_gps
+    
+    if type_sensor == "pressurem":
+        frame_alerts[20] = 0x50 #P
+        frame_alerts[21] = 0x4D #Minimo
+    if type_sensor == "pressurem":
+        frame_alerts[20] = 0x50 #P
+        frame_alerts[21] = 0x6D #Minimo
+    if frame_alerts[20] == 0x50:
+        frame_alerts[2] = 0x1B #adjust lenght
+        frame_alerts[22] = sensor[3]
+        frame_alerts[23] = sensor[2]
+        frame_alerts[24] = sensor[1]
+        frame_alerts[25] = sensor[0]
+        frame_alerts[26] = Time_h[0]
+        frame_alerts[27] = Time_h[1]
+        frame_alerts[28] = Time_m[0]
+        frame_alerts[29] = Time_m[1]
+        frame_alerts[30] = 0x00
+        checksum_gps = 0xFF - (sum(frame_alerts[3:-1]) % 256)
+        frame_alerts[30] = checksum_gps
     xbee.write(frame_alerts)
     
     
@@ -1150,6 +1198,12 @@ humity_Alert_M = True
 humity_Alert_m = True
 ligth_Alert_M = True
 ligth_Alert_m = True
+pressure_Alert_M = True
+pressure_Alert_m = True
+rain_Alert_m = True
+rain_Alert_M = True
+speed_Alert_M = True
+speed_Alert_m = True
 
 
 while True:
@@ -1404,11 +1458,11 @@ while True:
                             
                         current_time =  ascii_minute
                         
-                        if current_time != 2 :
+                        if current_time != 0 :
                             Reset = True
                     
-                        if current_time == 2 and Reset == True:
-                            print("restablecer flash**************/////**********")
+                        if current_time == 0 and Reset == True:
+                            print("restablecer flash *******************************")
                             Reset = False
                             try:
                                 with open('/Max_min.txt', 'w') as file:
@@ -1600,26 +1654,32 @@ while True:
                         if (lum > ligth_max_) and ligth_Alert_M == True:
                             ligth_Alert_M = False
                             send_alerts(lumBytes, timeUTC , "ligthM")
-                            
                         if (humidity < humedad_min_)  and humity_Alert_m == True:
                             send_alerts(humBytes, timeUTC , "humitym")
                             humity_Alert_m = False
                         if (humidity > humedad_max_) and humity_Alert_M == True:
                             send_alerts(humBytes, timeUTC , "humityM")
                             humity_Alert_M = False
-                            
-#                         if (humidity < humedad_min_ or humidity > humedad_max_) and humity_Alert_M == True:
-#                             print("humedad fuera de limites ")
-#                            # send_alerts(humidity, timeUTC)
-#                             humity_Alert_M = False
-#                             
-#                         if pressure < pressure_min_ or pressure > pressure_max_:
-#                             print("presion fuera de limites ")
-#                         #if lum <
-#                         if SpeedReal_ < speed_wind_min_ or SpeedReal_ > speed_wind_max_:
-#                             print("velocidad fuera de limites")
-#                         if rain_data < rain_min_ or rain_data >rain_max_:
+                        if (pressure < pressure_min_) and pressure_Alert_m == True:
+                            send_alerts(pressureBytes, timeUTC , "pressurem")
+                            pressure_Alert_m = False
+                        if (pressure > pressure_max_) and pressure_Alert_M == True:
+                            send_alerts(pressureBytes, timeUTC , "pressureM")
+                            pressure_Alert_M = False
+                        if (rain_data < rain_min_ ) and rain_Alert_m == True:
+                            send_alerts(rain_bytes, timeUTC , "rainm")
+                            rain_Alert_m = False
+                        if(rain_data > rain_max_) and rain_Alert_M == True:
+                            send_alerts(rain_bytes, timeUTC , "rainM")
+                            rain_Alert_M = False
+                        if (SpeedReal_ < speed_wind_min_ ) and speed_Alert_m == True:
+                            send_alerts(Speed_bytes, timeUTC , "speedm")
+                            speed_Alert_m = False
+                        if(rain_data > speed_wind_max_) and speed_Alert_M == True:
+                            send_alerts(Speed_bytes, timeUTC , "speedM")
+                            speed_Alert_M = False
                             print("lluvia fuera de limites")
+                             
                     if Set_points == "Set_points_off":
                         print("set points desactivados")
                         
