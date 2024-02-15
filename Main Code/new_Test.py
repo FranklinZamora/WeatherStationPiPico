@@ -265,7 +265,7 @@ def get_historicals():
             "Tiempo Minimo viento": '00:00:00',
             "Direccion de viento predominante": "",
             "Encendido virtual": False,
-            "Sensores Activos": "",
+            "Sensores Activos": "Sensors_off",
             "Set points": "",
             "Configuracion de envio": "",
             "tiempos de envio" : [0],
@@ -304,7 +304,7 @@ def get_historicals():
     Time_Min_Speed = contadores.get("Tiempo Minimo viento", '00:00:00')
     wind_direction = contadores.get("Direccion de viento predominante", "")
     encendido_virtual = contadores.get("Encendido virtual", False)
-    Sensors_on = contadores.get("Sensores Activos", "")
+    Sensors_on = contadores.get("Sensores Activos", "Sensors_off")
     Set_points = contadores.get("Set points", "")
     Config_time_of_send = contadores.get("Configuracion de envio", "")
     time_send = contadores.get("tiempos de envio",[0])
@@ -536,6 +536,18 @@ def Data_received(Coordinador, Sensors_on):
                 xbee.write(frame_H)
             
             if Sensors_on == "Sensors_on":
+                
+                if  byte_array[16] == 0x52:
+                    print("reset de alarmas ")
+                    frame_H[2] = 0x13 #adjust length
+                    frame_H[19] = 0x52
+                    frame_H[20] = 0x53
+                    frame_H[21] = 0x54
+                    frame_H[22] = 0x00
+                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                    frame_H[22] = checksum_gps
+                    xbee.write(frame_H)
+                    
                 
                 if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x0A:
                     print("\nModo detener formato horas")
@@ -823,7 +835,6 @@ def send_alerts(sensor, Time, type_sensor):
         checksum_gps = 0xFF - (sum(frame_alerts[3:-1]) % 256)
         frame_alerts[30] = checksum_gps
     xbee.write(frame_alerts)
-    
     
 
 def send_historicals(Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
@@ -1121,6 +1132,14 @@ Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_M
 wind_direction,encendido_virtual, Sensors_on, Set_points, Config_time_of_send, time_send, limits)  = get_historicals() #si
 utime.sleep(1)
 
+while Sensors_on == "":
+    (Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_Speed,
+    Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
+    Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
+    Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
+    wind_direction,encendido_virtual, Sensors_on, Set_points, Config_time_of_send, time_send, limits)  = get_historicals() #si
+    utime.sleep(1)
+
 
 print("len lista ", limits , len(limits))
 
@@ -1251,7 +1270,7 @@ while True:
                     try:
                         with open('/Max_min.txt', 'r') as file:
                             historical = eval(file.read())
-                        historical["Sensores Activos"] = "3hr"
+                        historical["Configuracion de envio"] = "3hr"
                         with open('/Max_min.txt', 'w') as file:
                             file.write(str(historical))
                         with open('/Max_min.txt', 'r') as file:
@@ -1297,7 +1316,7 @@ while True:
                     try:
                         with open('/Max_min.txt', 'r') as file:
                             historical = eval(file.read())
-                        historical["Sensores Activos"] = "5hr"
+                        historical["Configuracion de envio"] = "5hr"
                         with open('/Max_min.txt', 'w') as file:
                             file.write(str(historical))
                         with open('/Max_min.txt', 'r') as file:
