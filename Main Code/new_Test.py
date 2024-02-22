@@ -143,6 +143,57 @@ def calculate_speed(time_sec):
     kmperhour = kmpersec * SecsInAnHour
     return kmperhour * Adjustment
 
+def calculate_voltage():
+    frame_V = bytearray(15)
+    frame_V[0] = 0x7E #Start
+    frame_V[1] = 0x00 
+    frame_V[2] = 0x08
+    frame_V[3] = 0x08 
+    frame_V[4] = 0x01 
+    frame_V[5] = 0x49 
+    frame_V[6] = 0x53
+    frame_V[7] = 0x41
+    frame_V[8] = 0x44
+    frame_V[9] = 0x43
+    frame_V[10]= 0x30
+    frame_V[11]= 0x62
+    data = ""
+    byte_array = []
+    xbee.write(frame_V)
+    time.sleep(1)
+    data = xbee.read()
+    if data:
+        print("voltaje recibidos:", data)
+        for byte in data:
+            print(hex(byte), end=' ')
+            byte_array.append(byte)
+        print(f"{byte_array[12]} - {byte_array[13]}  {byte_array[14]} - {byte_array[15]}")
+        voltage_p = bytearray(2)
+        voltage_p[0] = byte_array[12]
+        voltage_p[1] = byte_array[13]
+        voltage_p_ = int.from_bytes(voltage_p, 'big')
+        voltage_real_p = voltage_p_ * 0.022265 # 22.8v = 8bits
+        
+        voltage_b = bytearray(2)
+        voltage_b[0] = byte_array[14]
+        voltage_b[1] = byte_array[15]
+        voltage_b_ = int.from_bytes(voltage_b, 'big')
+        voltage_real_b = voltage_b_ * 0.022265 
+        
+        print("mi voltaje panel es ", round(voltage_real_p,1) ,"V")
+        print("mi voltaje bateria es ", round(voltage_real_b,1) ,"V")
+        
+        byte_voltage_panel = int((round(voltage_real_p,1)*100))
+        byte_voltage_panel_ = ustruct.pack('H', byte_voltage_panel)
+        
+        byte_voltage_bateria = int((round(voltage_real_b,1)*100))
+        byte_voltage_bateria_ = ustruct.pack('H', byte_voltage_bateria)
+        
+        
+        
+        return byte_voltage_panel_[1],byte_voltage_panel_[0] , byte_voltage_bateria_[1], byte_voltage_bateria_[0]
+        
+
 def Alertas(sets):
     print("in alerts")
     print(len(sets))
@@ -353,392 +404,398 @@ def Data_received(Coordinador, Sensors_on):
     data = xbee.read()
     byte_array = []
     
-    if data:
-        print("Datos recibidos:", data)
-        for byte in data:
-            print(hex(byte), end=' ')
-            byte_array.append(byte)
+    if data is not None: 
     
-        if Coordinador[1] == 0:
-            if byte_array[5] == 0x4E and byte_array[6] == 0x44:#add coordinador
-                print("me llego mac")
-                mac = bytearray(10)
-                mac[0] =  byte_array[10]
-                mac[1] =  byte_array[11]
-                mac[2] =  byte_array[12]
-                mac[3] =  byte_array[13]
-                mac[4] =  byte_array[14]
-                mac[5] =  byte_array[15]
-                mac[6] =  byte_array[16]
-                mac[7] =  byte_array[17]
-                mac[8] =  byte_array[5]
-                mac[9] =  byte_array[6]
+        if 'v' in data:
+            segmento = data.split('v')
+            data = segmento[1:]
+        
+        if data:
+            print("Datos recibidos:", data)
+            for byte in data:
+                print(hex(byte), end=' ')
+                byte_array.append(byte)
+        
+            if Coordinador[1] == 0:
+                if byte_array[5] == 0x4E and byte_array[6] == 0x44:#add coordinador
+                    print("me llego mac")
+                    mac = bytearray(10)
+                    mac[0] =  byte_array[10]
+                    mac[1] =  byte_array[11]
+                    mac[2] =  byte_array[12]
+                    mac[3] =  byte_array[13]
+                    mac[4] =  byte_array[14]
+                    mac[5] =  byte_array[15]
+                    mac[6] =  byte_array[16]
+                    mac[7] =  byte_array[17]
+                    mac[8] =  byte_array[5]
+                    mac[9] =  byte_array[6]
+                    
+                    mac_strings = ['{:02X}'.format(value) for value in mac]
+
+                    # Join the mac strings into a single string
+                    mac_string = ':'.join(mac_strings)
+
+                    # Write the mac string to a file
+                    with open('M_flash.txt', 'w') as file:
+                        file.write(mac_string)
+                    return mac
                 
-                mac_strings = ['{:02X}'.format(value) for value in mac]
-
-                # Join the mac strings into a single string
-                mac_string = ':'.join(mac_strings)
-
-                # Write the mac string to a file
-                with open('M_flash.txt', 'w') as file:
-                    file.write(mac_string)
-                return mac
-            
-        if all(Coordinador[i] == byte_array[i + 4] for i in range(8)) and byte_array[15] == 0x45: 
-            
-            frame_H = bytearray(120)
-            
-            #format of hours message
-            frame_H[0] = 0x7E #Start
-            frame_H[1] = 0x00 #length
-            frame_H[2] = 0x00
-            frame_H[3] = 0x10 #type
-            frame_H[4] = 0x01 #ID
-            frame_H[5] = 0x00 #MAC
-            frame_H[6] = 0x13
-            frame_H[7] = 0xA2
-            frame_H[8] = 0x00
-            frame_H[9] = 0x41
-            frame_H[10]= 0xEA
-            frame_H[11]= 0x56
-            frame_H[12]= 0x61 #END_MAC
-            frame_H[13]= 0xFF #address
-            frame_H[14]= 0xFE
-            frame_H[15]= 0x00 #broadcast
-            frame_H[16]= 0x00 #options
-            frame_H[17] = 0x45 #header E
-            frame_H[18] = 0x48 #hours comand
-            
-            if byte_array[16] == 0x54 and byte_array[17] == 0x01 and byte_array[18] == 0xB3:
-                print("\nEncendido virtual")
-                try:
-                    with open('/Max_min.txt', 'r') as file:
-                        historical = eval(file.read())
-                    
-                    historical["Encendido virtual"] = True
-                    with open('/Max_min.txt', 'w') as file:
-                        file.write(str(historical))
-                   
-                   #frame response
-                    frame_H[2] = 0x13 #adjust length
-                    frame_H[18] = 0x54
-                    frame_H[19] = 0X4F
-                    frame_H[20] = 0X4E
-                    frame_H[21] = 0X0B
-                    frame_H[22] = 0x00
-                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[22] = checksum_gps
-                    xbee.write(frame_H)
-                    
-                    return True
-                        
-                except (OSError, SyntaxError):
-                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
-                    historical = {}
-                    
-            if byte_array[16] == 0x54 and byte_array[17] == 0x00 and byte_array[18] == 0xB3:
-                print("\nApagado virtual")
-                try:
-                    with open('/Max_min.txt', 'r') as file:
-                        historical = eval(file.read())
-                    
-                    historical["Encendido virtual"] = False
-                    with open('/Max_min.txt', 'w') as file:
-                        file.write(str(historical))
-                        
-                    frame_H[2] = 0x14 #adjust length
-                    frame_H[18] = 0x54
-                    frame_H[19] = 0X4F
-                    frame_H[20] = 0X46
-                    frame_H[21] = 0X46
-                    frame_H[22] = 0XCD
-                    frame_H[23] = 0x00
-                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[23] = checksum_gps
-                    xbee.write(frame_H)
-                        
-                    return False
-                        
-                except (OSError, SyntaxError):
-                    # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
-                    historical = {}
-                    
-            if byte_array[16] == 0x73 and byte_array[17] == 0x01:
-                print("encender sensores")
-                try:
-                    with open('/Max_min.txt', 'r') as file:
-                        historical = eval(file.read())
-                    historical["Sensores Activos"] = "Sensors_on"
-                    with open('/Max_min.txt', 'w') as file:
-                        file.write(str(historical))
-                        
-                    frame_H[2] = 0x12 #adjust length
-                    frame_H[18] = 0x73
-                    frame_H[19] = 0x4F
-                    frame_H[20] = 0x4E
-                    frame_H[21] = 0x00
-                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[21] = checksum_gps
-                    xbee.write(frame_H)
-                    
-                    return "Sensors_on"
-                except (OSError, SyntaxError):
-                    historical = {}
+            if all(Coordinador[i] == byte_array[i + 4] for i in range(8)) and byte_array[15] == 0x45: 
                 
-            if byte_array[16] == 0x73 and byte_array[17] == 0x00:
-                print("apagar sensores")
-                try:
-                    with open('/Max_min.txt', 'r') as file:
-                        historical = eval(file.read())
-                    historical["Sensores Activos"] = "Sensors_off"
-                    with open('/Max_min.txt', 'w') as file:
-                        file.write(str(historical))
-                    
-                    frame_H[2] = 0x14 #adjust length
-                    frame_H[18] = 0x73
-                    frame_H[19] = 0x4F
-                    frame_H[20] = 0x4E
-                    frame_H[21] = 0x46
-                    frame_H[22] = 0x46
-                    frame_H[23] = 0x00
-                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[23] = checksum_gps
-                    xbee.write(frame_H)
-                    
-                    return "Sensors_off"
-                except (OSError, SyntaxError):
-                    historical = {}
-            if byte_array[16] == 0x62:
-                frame_H[2] = 0x12 # Ajustar longitud
-                frame_H[18] = 0x62
-                frame_H[19] = 0x04
-                frame_H[20] = 0x90
-                frame_H[21] = 0x00
-
-                checksum_ = 0xFF - (sum(frame_H[3:-1]) % 256)
-                frame_H[21] = checksum_
-
-                xbee.write(frame_H)
-
-                print("bateria")
-
+                frame_H = bytearray(120)
                 
-                    
-            if byte_array[16] == 0x70:
-                print("panel")
-                frame_H[2] = 0x12 # Ajustar longitud
-                frame_H[18] = 0x70
-                frame_H[19] = 0x07
-                frame_H[20] = 0x08
-                frame_H[21] = 0x00
-                checksum_ = 0xFF - (sum(frame_H[3:-1]) % 256)
-                frame_H[21] = checksum_
-                xbee.write(frame_H)
-            
-            if Sensors_on == "Sensors_on":
+                #format of hours message
+                frame_H[0] = 0x7E #Start
+                frame_H[1] = 0x00 #length
+                frame_H[2] = 0x00
+                frame_H[3] = 0x10 #type
+                frame_H[4] = 0x01 #ID
+                frame_H[5] = 0x00 #MAC
+                frame_H[6] = 0x13
+                frame_H[7] = 0xA2
+                frame_H[8] = 0x00
+                frame_H[9] = 0x41
+                frame_H[10]= 0xEA
+                frame_H[11]= 0x56
+                frame_H[12]= 0x61 #END_MAC
+                frame_H[13]= 0xFF #address
+                frame_H[14]= 0xFE
+                frame_H[15]= 0x00 #broadcast
+                frame_H[16]= 0x00 #options
+                frame_H[17] = 0x45 #header E
+                frame_H[18] = 0x48 #hours comand
                 
-                if  byte_array[16] == 0x52:
-                    print("reset de alarmas ")
-                    frame_H[2] = 0x13 #adjust length
-                    frame_H[19] = 0x52
-                    frame_H[20] = 0x53
-                    frame_H[21] = 0x54
-                    frame_H[22] = 0x00
-                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[22] = checksum_gps
-                    xbee.write(frame_H)
-                    
-                
-                if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x0A:
-                    print("\nModo detener formato horas")
+                if byte_array[16] == 0x54 and byte_array[17] == 0x01 and byte_array[18] == 0xB3:
+                    print("\nEncendido virtual")
                     try:
                         with open('/Max_min.txt', 'r') as file:
                             historical = eval(file.read())
-                        historical["Configuracion de envio"] = "N_hours"
-                        with open('/Max_min.txt', 'w') as file:
-                            file.write(str(historical))
-                    except (OSError, SyntaxError):
-                        historical = {}
-                    frame_H[2] = 0x12 #adjust length
-                    frame_H[19] = 0x02
-                    frame_H[20] = 0x0A
-                    frame_H[21] = 0x00
-                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[21] = checksum_gps
-                    xbee.write(frame_H)
-                    
-                    return "N_hours"
-                
-                    
-                if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x01:
-                    print("\nmodo 1hr activo")
-                    try:
-                        with open('/Max_min.txt', 'r') as file:
-                            historical = eval(file.read())
-                        historical["Configuracion de envio"] = "1hr"
-                        with open('/Max_min.txt', 'w') as file:
-                            file.write(str(historical))
-                    except (OSError, SyntaxError):
-                        historical = {}
-                    frame_H[2] = 0x12 #adjust length
-                    frame_H[19] = 0x02
-                    frame_H[20] = 0x01
-                    frame_H[21] = 0x00
-                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[21] = checksum_gps
-                    xbee.write(frame_H)
-                    
-                    return "1hr"
-                    
-                if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x03:
-                    print("\ncomando 3h")
-                    hora = bytearray(6)
-                    try:
-                        with open('/Max_min.txt', 'r') as file:
-                            historical = eval(file.read())
-                        historical["Configuracion de envio"] = "3hr"
-                        with open('/Max_min.txt', 'w') as file:
-                            file.write(str(historical))
-                    except (OSError, SyntaxError):
-                        historical = {}
                         
-                    if len(hora) == 6:
-                        hora[0] =  byte_array[19]
-                        hora[1] =  byte_array[20]
-                        hora[2] =  byte_array[21]
-                        hora[3] =  byte_array[22]
-                        hora[4] =  byte_array[23]
-                        hora[5] =  byte_array[24]
-                        
-                        frame_H[2] = 0x18 #adjust length
-                        frame_H[19] = 0x02
-                        frame_H[20] = 0x03
-                        frame_H[21] = hora[0] 
-                        frame_H[22] = hora[1] 
-                        frame_H[23] = hora[2] 
-                        frame_H[24] = hora[3] 
-                        frame_H[25] = hora[4]
-                        frame_H[26] = hora[5]
-                        frame_H[27] = 0x00
+                        historical["Encendido virtual"] = True
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                       
+                       #frame response
+                        frame_H[2] = 0x13 #adjust length
+                        frame_H[18] = 0x54
+                        frame_H[19] = 0X4F
+                        frame_H[20] = 0X4E
+                        frame_H[21] = 0X0B
+                        frame_H[22] = 0x00
                         checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                        frame_H[27] = checksum_gps
+                        frame_H[22] = checksum_gps
                         xbee.write(frame_H)
                         
-                        return hora
-                    
+                        return True
+                            
+                    except (OSError, SyntaxError):
+                        # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+                        historical = {}
                         
-                if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x05:
-                    hora = bytearray(10)
-                    print("\nmodo 5hr activo")
+                if byte_array[16] == 0x54 and byte_array[17] == 0x00 and byte_array[18] == 0xB3:
+                    print("\nApagado virtual")
                     try:
                         with open('/Max_min.txt', 'r') as file:
                             historical = eval(file.read())
-                        historical["Configuracion de envio"] = "5hr"
+                        
+                        historical["Encendido virtual"] = False
                         with open('/Max_min.txt', 'w') as file:
                             file.write(str(historical))
-                    except (OSError, SyntaxError):
-                        historical = {}
-                        
-                    if len(hora) == 10:
-                        hora[0] =  byte_array[19]
-                        hora[1] =  byte_array[20]
-                        hora[2] =  byte_array[21]
-                        hora[3] =  byte_array[22]
-                        hora[4] =  byte_array[23]
-                        hora[5] =  byte_array[24]
-                        hora[6] =  byte_array[25]
-                        hora[7] =  byte_array[26]
-                        hora[8] =  byte_array[27]
-                        hora[9] =  byte_array[28]
-                        
-                        frame_H[2] = 0x1C #adjust length
-                        frame_H[19] = 0x02
-                        frame_H[20] = 0x03
-                        frame_H[21] = hora[0] 
-                        frame_H[22] = hora[1] 
-                        frame_H[23] = hora[2] 
-                        frame_H[24] = hora[3] 
-                        frame_H[25] = hora[4]
-                        frame_H[26] = hora[5]
-                        frame_H[27] = hora[6] 
-                        frame_H[28] = hora[7] 
-                        frame_H[29] = hora[8]
-                        frame_H[30] = hora[9]
-                        frame_H[31] = 0x00
+                            
+                        frame_H[2] = 0x14 #adjust length
+                        frame_H[18] = 0x54
+                        frame_H[19] = 0X4F
+                        frame_H[20] = 0X46
+                        frame_H[21] = 0X46
+                        frame_H[22] = 0XCD
+                        frame_H[23] = 0x00
                         checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                        frame_H[31] = checksum_gps
+                        frame_H[23] = checksum_gps
                         xbee.write(frame_H)
-                        return hora
+                            
+                        return False
+                            
+                    except (OSError, SyntaxError):
+                        # Si el archivo no existe o no es un diccionario válido, iniciar con un diccionario vacío
+                        historical = {}
+                        
+                if byte_array[16] == 0x73 and byte_array[17] == 0x01:
+                    print("encender sensores")
+                    try:
+                        with open('/Max_min.txt', 'r') as file:
+                            historical = eval(file.read())
+                        historical["Sensores Activos"] = "Sensors_on"
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                            
+                        frame_H[2] = 0x12 #adjust length
+                        frame_H[18] = 0x73
+                        frame_H[19] = 0x4F
+                        frame_H[20] = 0x4E
+                        frame_H[21] = 0x00
+                        checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                        frame_H[21] = checksum_gps
+                        xbee.write(frame_H)
+                        
+                        return "Sensors_on"
+                    except (OSError, SyntaxError):
+                        historical = {}
                     
-                if byte_array[16] == 0x52:
-                    print("reset alarmas")
+                if byte_array[16] == 0x73 and byte_array[17] == 0x00:
+                    print("apagar sensores")
+                    try:
+                        with open('/Max_min.txt', 'r') as file:
+                            historical = eval(file.read())
+                        historical["Sensores Activos"] = "Sensors_off"
+                        with open('/Max_min.txt', 'w') as file:
+                            file.write(str(historical))
+                        
+                        frame_H[2] = 0x14 #adjust length
+                        frame_H[18] = 0x73
+                        frame_H[19] = 0x4F
+                        frame_H[20] = 0x4E
+                        frame_H[21] = 0x46
+                        frame_H[22] = 0x46
+                        frame_H[23] = 0x00
+                        checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                        frame_H[23] = checksum_gps
+                        xbee.write(frame_H)
+                        
+                        return "Sensors_off"
+                    except (OSError, SyntaxError):
+                        historical = {}
+                if byte_array[16] == 0x62:
+                    frame_H[2] = 0x12 # Ajustar longitud
+                    frame_H[18] = 0x62
+                    frame_H[19] = 0x04
+                    frame_H[20] = 0x90
+                    frame_H[21] = 0x00
+
+                    checksum_ = 0xFF - (sum(frame_H[3:-1]) % 256)
+                    frame_H[21] = checksum_
+
+                    xbee.write(frame_H)
+
+                    print("bateria")
+
                     
-                if byte_array[16] == 0x73 and byte_array[17] == 0x03:
-                    print("\nsend sensors")
-                    return "send"
+                        
+                if byte_array[16] == 0x70:
+                    print("panel")
+                    frame_H[2] = 0x12 # Ajustar longitud
+                    frame_H[18] = 0x70
+                    frame_H[19] = 0x07
+                    frame_H[20] = 0x08
+                    frame_H[21] = 0x00
+                    checksum_ = 0xFF - (sum(frame_H[3:-1]) % 256)
+                    frame_H[21] = checksum_
+                    xbee.write(frame_H)
                 
-                if byte_array[16] == 0x53 and byte_array[17] == 0x00:
-                    print("set points desactivados")
-                    try:
-                        with open('/Max_min.txt', 'r') as file:
-                            historical = eval(file.read())
+                if Sensors_on == "Sensors_on":
+                    
+                    if  byte_array[16] == 0x52:
+                        print("reset de alarmas ")
+                        frame_H[2] = 0x13 #adjust length
+                        frame_H[19] = 0x52
+                        frame_H[20] = 0x53
+                        frame_H[21] = 0x54
+                        frame_H[22] = 0x00
+                        checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                        frame_H[22] = checksum_gps
+                        xbee.write(frame_H)
                         
-                        historical["Set points"] = "Set_points_off"
-                        with open('/Max_min.txt', 'w') as file:
-                            file.write(str(historical))
-                    except (OSError, SyntaxError):
-                        historical = {}
                     
-                    frame_H[2] = 0x13 #adjust length
-                    frame_H[18] = 0x53
-                    frame_H[19] = 0x4F
-                    frame_H[20] = 0X46
-                    frame_H[21] = 0X46
-                    frame_H[22] = 0x00
-                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[22] = checksum_gps
-                    xbee.write(frame_H)
-                    return "Set_points_off"
-                    
-                if byte_array[16] == 0x53 and byte_array[17] == 0x01:
-                    print("set points activados")
-                    try:
-                        with open('/Max_min.txt', 'r') as file:
-                            historical = eval(file.read())
+                    if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x0A:
+                        print("\nModo detener formato horas")
+                        try:
+                            with open('/Max_min.txt', 'r') as file:
+                                historical = eval(file.read())
+                            historical["Configuracion de envio"] = "N_hours"
+                            with open('/Max_min.txt', 'w') as file:
+                                file.write(str(historical))
+                        except (OSError, SyntaxError):
+                            historical = {}
+                        frame_H[2] = 0x12 #adjust length
+                        frame_H[19] = 0x02
+                        frame_H[20] = 0x0A
+                        frame_H[21] = 0x00
+                        checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                        frame_H[21] = checksum_gps
+                        xbee.write(frame_H)
                         
-                        historical["Set points"] = "Set_points_on"
-                        with open('/Max_min.txt', 'w') as file:
-                            file.write(str(historical))
-                    except (OSError, SyntaxError):
-                        historical = {}
-                    frame_H[2] = 0x12 #adjust length
-                    frame_H[18] = 0x53
-                    frame_H[19] = 0x4F
-                    frame_H[20] = 0X4E
-                    frame_H[21] = 0x00
-                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[21] = checksum_gps
-                    xbee.write(frame_H)
+                        return "N_hours"
                     
-                    return "Set_points_on"
+                        
+                    if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x01:
+                        print("\nmodo 1hr activo")
+                        try:
+                            with open('/Max_min.txt', 'r') as file:
+                                historical = eval(file.read())
+                            historical["Configuracion de envio"] = "1hr"
+                            with open('/Max_min.txt', 'w') as file:
+                                file.write(str(historical))
+                        except (OSError, SyntaxError):
+                            historical = {}
+                        frame_H[2] = 0x12 #adjust length
+                        frame_H[19] = 0x02
+                        frame_H[20] = 0x01
+                        frame_H[21] = 0x00
+                        checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                        frame_H[21] = checksum_gps
+                        xbee.write(frame_H)
+                        
+                        return "1hr"
+                        
+                    if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x03:
+                        print("\ncomando 3h")
+                        hora = bytearray(6)
+                        try:
+                            with open('/Max_min.txt', 'r') as file:
+                                historical = eval(file.read())
+                            historical["Configuracion de envio"] = "3hr"
+                            with open('/Max_min.txt', 'w') as file:
+                                file.write(str(historical))
+                        except (OSError, SyntaxError):
+                            historical = {}
+                            
+                        if len(hora) == 6:
+                            hora[0] =  byte_array[19]
+                            hora[1] =  byte_array[20]
+                            hora[2] =  byte_array[21]
+                            hora[3] =  byte_array[22]
+                            hora[4] =  byte_array[23]
+                            hora[5] =  byte_array[24]
+                            
+                            frame_H[2] = 0x18 #adjust length
+                            frame_H[19] = 0x02
+                            frame_H[20] = 0x03
+                            frame_H[21] = hora[0] 
+                            frame_H[22] = hora[1] 
+                            frame_H[23] = hora[2] 
+                            frame_H[24] = hora[3] 
+                            frame_H[25] = hora[4]
+                            frame_H[26] = hora[5]
+                            frame_H[27] = 0x00
+                            checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                            frame_H[27] = checksum_gps
+                            xbee.write(frame_H)
+                            
+                            return hora
+                        
+                            
+                    if byte_array[16] == 0x48 and byte_array[17] == 0x02 and byte_array[18] == 0x05:
+                        hora = bytearray(10)
+                        print("\nmodo 5hr activo")
+                        try:
+                            with open('/Max_min.txt', 'r') as file:
+                                historical = eval(file.read())
+                            historical["Configuracion de envio"] = "5hr"
+                            with open('/Max_min.txt', 'w') as file:
+                                file.write(str(historical))
+                        except (OSError, SyntaxError):
+                            historical = {}
+                            
+                        if len(hora) == 10:
+                            hora[0] =  byte_array[19]
+                            hora[1] =  byte_array[20]
+                            hora[2] =  byte_array[21]
+                            hora[3] =  byte_array[22]
+                            hora[4] =  byte_array[23]
+                            hora[5] =  byte_array[24]
+                            hora[6] =  byte_array[25]
+                            hora[7] =  byte_array[26]
+                            hora[8] =  byte_array[27]
+                            hora[9] =  byte_array[28]
+                            
+                            frame_H[2] = 0x1C #adjust length
+                            frame_H[19] = 0x02
+                            frame_H[20] = 0x03
+                            frame_H[21] = hora[0] 
+                            frame_H[22] = hora[1] 
+                            frame_H[23] = hora[2] 
+                            frame_H[24] = hora[3] 
+                            frame_H[25] = hora[4]
+                            frame_H[26] = hora[5]
+                            frame_H[27] = hora[6] 
+                            frame_H[28] = hora[7] 
+                            frame_H[29] = hora[8]
+                            frame_H[30] = hora[9]
+                            frame_H[31] = 0x00
+                            checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                            frame_H[31] = checksum_gps
+                            xbee.write(frame_H)
+                            return hora
+                        
+                    if byte_array[16] == 0x52:
+                        print("reset alarmas")
+                        
+                    if byte_array[16] == 0x73 and byte_array[17] == 0x03:
+                        print("\nsend sensors")
+                        return "send"
                     
-                if byte_array[16] == 0x53 and byte_array[17] == 0x02:
-                    print("configurando setpoints")
-                    set_points = bytearray(28) #length message
-                    set_points = byte_array[18:46]
-                    print(set_points[0] , "<-" )
-                    
-                    print(set_points, len(set_points))
-                    frame_H[2] = 0x12 #adjust length
-                    frame_H[18] = 0x53
-                    frame_H[19] = 0x45
-                    frame_H[20] = 0X54
-                    frame_H[21] = 0x00
-                    checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
-                    frame_H[21] = checksum_gps
-                    xbee.write(frame_H)
-                    
-                    return set_points
+                    if byte_array[16] == 0x53 and byte_array[17] == 0x00:
+                        print("set points desactivados")
+                        try:
+                            with open('/Max_min.txt', 'r') as file:
+                                historical = eval(file.read())
+                            
+                            historical["Set points"] = "Set_points_off"
+                            with open('/Max_min.txt', 'w') as file:
+                                file.write(str(historical))
+                        except (OSError, SyntaxError):
+                            historical = {}
+                        
+                        frame_H[2] = 0x13 #adjust length
+                        frame_H[18] = 0x53
+                        frame_H[19] = 0x4F
+                        frame_H[20] = 0X46
+                        frame_H[21] = 0X46
+                        frame_H[22] = 0x00
+                        checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                        frame_H[22] = checksum_gps
+                        xbee.write(frame_H)
+                        return "Set_points_off"
+                        
+                    if byte_array[16] == 0x53 and byte_array[17] == 0x01:
+                        print("set points activados")
+                        try:
+                            with open('/Max_min.txt', 'r') as file:
+                                historical = eval(file.read())
+                            
+                            historical["Set points"] = "Set_points_on"
+                            with open('/Max_min.txt', 'w') as file:
+                                file.write(str(historical))
+                        except (OSError, SyntaxError):
+                            historical = {}
+                        frame_H[2] = 0x12 #adjust length
+                        frame_H[18] = 0x53
+                        frame_H[19] = 0x4F
+                        frame_H[20] = 0X4E
+                        frame_H[21] = 0x00
+                        checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                        frame_H[21] = checksum_gps
+                        xbee.write(frame_H)
+                        
+                        return "Set_points_on"
+                        
+                    if byte_array[16] == 0x53 and byte_array[17] == 0x02:
+                        print("configurando setpoints")
+                        set_points = bytearray(28) #length message
+                        set_points = byte_array[18:46]
+                        print(set_points[0] , "<-" )
+                        
+                        print(set_points, len(set_points))
+                        frame_H[2] = 0x12 #adjust length
+                        frame_H[18] = 0x53
+                        frame_H[19] = 0x45
+                        frame_H[20] = 0X54
+                        frame_H[21] = 0x00
+                        checksum_gps = 0xFF - (sum(frame_H[3:-1]) % 256)
+                        frame_H[21] = checksum_gps
+                        xbee.write(frame_H)
+                        
+                        return set_points
                 
     
 def search_coordinador():
@@ -841,9 +898,16 @@ def send_historicals(Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_S
 Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
 Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
 Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
-wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes):
+wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes , bateria, panel ):
     
     try:
+        #voltage
+        bateria = bytearray(2)
+        panel = bytearray(2)
+        bateria[0], bateria[1], panel[0], panel[1] = calculate_voltage()
+        
+        print(f"{bateria[0]} - {bateria[1]} - {panel[0]} - {panel[1]}")
+        
         print(type(Time_Max_temp))
         frame_historicals = bytearray(120)
         
@@ -887,7 +951,7 @@ wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wi
         
         frame_historicals[0] = 0x7E #Start
         frame_historicals[1] = 0x00 #length
-        frame_historicals[2] = 0x71
+        frame_historicals[2] = 0x6f
         frame_historicals[3] = 0x10 #type
         frame_historicals[4] = 0x01 #ID
         frame_historicals[5] = 0x00 #MAC
@@ -1003,14 +1067,20 @@ wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wi
         frame_historicals[107] = altBytes[0]
         frame_historicals[108] = dir_wind_Bytes[1]
         frame_historicals[109] = dir_wind_Bytes[0]
+        
+        frame_historicals[110] = bateria[0]
+        frame_historicals[111] = bateria[1]
+        frame_historicals[112] = panel[0]
+        frame_historicals[113] = panel[1]
+        
         #put dir_predominant
         
-        frame_historicals[110] = 0x00
+        frame_historicals[114] = 0x00
         checksum_gps = 0xFF - (sum(frame_historicals[3:-1]) % 256)
-        frame_historicals[110] = checksum_gps
+        frame_historicals[114] = checksum_gps
         xbee.write(frame_historicals)
         
-        for i in range(0,111):
+        for i in range(0,114):
             print(hex(frame_historicals[i]), end = ' ')
         
     except Exception as e:
@@ -1224,6 +1294,13 @@ rain_Alert_M = True
 speed_Alert_M = True
 speed_Alert_m = True
 
+#voltage
+bateria = bytearray(2)
+panel = bytearray(2)
+bateria[0], bateria[1], panel[0], panel[1] = calculate_voltage()
+
+print(f"{bateria[0]} - {bateria[1]} - {panel[0]} - {panel[1]}")
+
 
 while True:
     try:
@@ -1357,6 +1434,7 @@ while True:
                     Set_points = data
                     
                 #print(Sensors_on)
+                bateria[0], bateria[1], panel[0], panel[1] = calculate_voltage()
                 
                 if Sensors_on == "Sensors_on":
                     #Wind direccion
@@ -1451,7 +1529,6 @@ while True:
                     print("this iss my max temp " , Max_temp)
                     print("******" , Set_points)
                     print("------", active_limits)
-                   
                     
                     #request data  to GPS
                     byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, Gps_active = GPS("Send")
@@ -1567,7 +1644,7 @@ while True:
                             Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
                             Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
                             Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
-                            wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes)                 
+                            wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes, bateria , panel)                 
                     
                     #calculate historical wind direction
                     predominant_directions_count[dir_wind] += 1
