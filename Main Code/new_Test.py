@@ -79,55 +79,59 @@ def time_hex_historicals(time_date):
         print(f"An exception occurred while getting bytes time: {e}")
 
 def GPS(request):
-    # GPS active flag
-    gps_on = False
-    sentence = uart.readline()
+    try:
+        # GPS active flag
+        gps_on = False
+        sentence = uart.readline()
 
-    if sentence:
-        # Decode GPS data
-        gps_data = sentence.decode('utf-8')
+        if sentence:
+            # Decode GPS data
+            gps_data = sentence.decode('utf-8')
 
-        # Update the GPS object with the decoded data
-        for char in gps_data:
-            my_gps.update(char)
+            # Update the GPS object with the decoded data
+            for char in gps_data:
+                my_gps.update(char)
 
-        # Extract time and date components
-        horas, minutos, segundos = my_gps.timestamp
-        segundos = round(segundos)
-        dia, mes, ano = my_gps.date
+            # Extract time and date components
+            horas, minutos, segundos = my_gps.timestamp
+            segundos = round(segundos)
+            dia, mes, ano = my_gps.date
 
-        # Format the time and date
-        timeUTC = '{:02d}:{:02d}:{:02d}'.format(horas, minutos, segundos)
-        dateNew = '{:02d}-{:02d}-{:02d}'.format(dia, mes, ano)
-        
-        print(f"20{ano}")
-        print(f"{horas}:{minutos}")
-
-        # Check if GPS is configured
-        if ano == 80 or ano == 0:
-            gps_on = False
-        else:
-            gps_on = True
+            # Format the time and date
+            timeUTC = '{:02d}:{:02d}:{:02d}'.format(horas, minutos, segundos)
+            dateNew = '{:02d}-{:02d}-{:02d}'.format(dia, mes, ano)
             
-        # Convert time and date components to bytes
-        byte_segundo, byte_minuto, byte_hora = time_hex_historicals(timeUTC) 
-#         byte_hora = date_hex_ascii(horas)
-#         byte_minuto = date_hex_ascii(minutos)
-#         byte_segundo = date_hex_ascii(segundos)
-        byte_dia = date_hex_ascii(dia)
-        byte_mes = date_hex_ascii(mes)
-        byte_ano = date_hex_ascii(ano)
+            print(f"20{ano}")
+            print(f"{horas}:{minutos}")
 
-        # Return values based on the request type
-        if request == "Send":
-            return byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, gps_on
-        
-        elif request == "Status":
-            #print("Status GPS")
-            return gps_on, timeUTC
+            # Check if GPS is configured
+            if ano == 80 or ano == 0:
+                gps_on = False
+            else:
+                gps_on = True
+                
+            # Convert time and date components to bytes
+            byte_segundo, byte_minuto, byte_hora = time_hex_historicals(timeUTC) 
+    #         byte_hora = date_hex_ascii(horas)
+    #         byte_minuto = date_hex_ascii(minutos)
+    #         byte_segundo = date_hex_ascii(segundos)
+            byte_dia = date_hex_ascii(dia)
+            byte_mes = date_hex_ascii(mes)
+            byte_ano = date_hex_ascii(ano)
 
-    # Return default values if no GPS data is available
-    return 0, 0, 0, 0, 0, 0, 0, False
+            # Return values based on the request type
+            if request == "Send":
+                return byte_hora, byte_minuto, byte_segundo, byte_dia, byte_mes, byte_ano, timeUTC, gps_on
+            
+            elif request == "Status":
+                #print("Status GPS")
+                return gps_on, timeUTC
+
+        # Return default values if no GPS data is available
+        return 0, 0, 0, 0, 0, 0, 0, False
+    except Exception as e:
+         print(f"GPS no format UTF: {e}")
+         return 0, 0, 0, 0, 0, 0, 0, False
 
 #Metod Rain
 def bucket_tipped():                             
@@ -162,7 +166,8 @@ def calculate_voltage():
     xbee.write(frame_V)
     time.sleep(1)
     data = xbee.read()
-    if data:
+    #print("tamaño de data " ,len(data))
+    if data and len(data)>6:
         print("voltaje recibidos:", data)
         for byte in data:
             print(hex(byte), end=' ')
@@ -172,7 +177,7 @@ def calculate_voltage():
         voltage_p[0] = byte_array[12]
         voltage_p[1] = byte_array[13]
         voltage_p_ = int.from_bytes(voltage_p, 'big')
-        voltage_real_p = voltage_p_ * 0.022265 # 22.8v = 8bits
+        voltage_real_p = voltage_p_ * 0.022265 # 22.8v = 8bits || 0.022265 = valor de voltaje de cada bit
         
         voltage_b = bytearray(2)
         voltage_b[0] = byte_array[14]
@@ -189,10 +194,9 @@ def calculate_voltage():
         byte_voltage_bateria = int((round(voltage_real_b,1)*100))
         byte_voltage_bateria_ = ustruct.pack('H', byte_voltage_bateria)
         
-        
-        
         return byte_voltage_panel_[1],byte_voltage_panel_[0] , byte_voltage_bateria_[1], byte_voltage_bateria_[0]
-        
+    
+    return 0x00, 0x00, 0x00, 0x00
 
 def Alertas(sets):
     print("in alerts")
@@ -407,8 +411,13 @@ def Data_received(Coordinador, Sensors_on):
     if data is not None: 
     
         if 'v' in data:
-            segmento = data.split('v')
-            data = segmento[1:]
+            try:
+                segmento = data.split('v')
+                data = segmento[1:]
+            except Exception as e:
+                print(f"data hex no convert: {e}")
+#         print(f"An exception occurred in general code: {e}")
+                
         
         if data:
             print("Datos recibidos:", data)
@@ -1522,7 +1531,7 @@ while True:
                     
                     #pressure
                     mpl2 = MPL3115A2(i2cmpl, mode=MPL3115A2.PRESSURE)
-                    sensor_pres = mpl2.pressure()
+                    sensor_pres = mpl2.pressure() #U Pa
                     pressure =  int((sensor_pres)) #*100
                     pressureBytes = ustruct.pack('I',pressure)
                     
@@ -1802,7 +1811,6 @@ while True:
                                 
                     except Exception as e:
                         print(f"An exception occurred historicals: {e}")
-                        #print("se tiene coordinador ")
         else:
             if contador_mac >= 16:
                 contador_mac = 0
