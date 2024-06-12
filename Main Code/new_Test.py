@@ -813,7 +813,7 @@ def search_coordinador():
     search = bytes([0x7E, 0x00, 0x0F, 0x08, 0x01, 0x4E, 0x44, 0x43, 0x6F, 0x6F, 0x72, 0x64, 0x69, 0x6E, 0x61, 0x64, 0x6F, 0x72, 0xF0])
     xbee.write(search)
     
-def send_alerts(sensor, Time, type_sensor, ,Coordinador):
+def send_alerts(sensor, Time, type_sensor, Coordinador):
     print("tamano de la lista de alertas" , len(sensor))
     Time_s, Time_m, Time_h = time_hex_historicals(Time)
     
