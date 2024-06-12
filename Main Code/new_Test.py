@@ -464,10 +464,10 @@ def Data_received(Coordinador, Sensors_on):
                 frame_H[6] = 0x13
                 frame_H[7] = 0xA2
                 frame_H[8] = 0x00
-                frame_H[9] = 0x41
-                frame_H[10]= 0xEA
-                frame_H[11]= 0x56
-                frame_H[12]= 0x61 #END_MAC
+                frame[9] = Coordinador[4]
+                frame[10]= Coordinador[5]
+                frame[11]= Coordinador[6]
+                frame[12]= Coordinador[7]#END_MAC
                 frame_H[13]= 0xFF #address
                 frame_H[14]= 0xFE
                 frame_H[15]= 0x00 #broadcast
@@ -813,7 +813,7 @@ def search_coordinador():
     search = bytes([0x7E, 0x00, 0x0F, 0x08, 0x01, 0x4E, 0x44, 0x43, 0x6F, 0x6F, 0x72, 0x64, 0x69, 0x6E, 0x61, 0x64, 0x6F, 0x72, 0xF0])
     xbee.write(search)
     
-def send_alerts(sensor, Time, type_sensor):
+def send_alerts(sensor, Time, type_sensor, ,Coordinador):
     print("tamano de la lista de alertas" , len(sensor))
     Time_s, Time_m, Time_h = time_hex_historicals(Time)
     
@@ -828,10 +828,10 @@ def send_alerts(sensor, Time, type_sensor):
     frame_alerts[6] = 0x13
     frame_alerts[7] = 0xA2
     frame_alerts[8] = 0x00
-    frame_alerts[9] = 0x41
-    frame_alerts[10]= 0xEA
-    frame_alerts[11]= 0x56
-    frame_alerts[12]= 0x61 #END_MAC
+    frame_alerts[9] = Coordinador[4]
+    frame_alerts[10]= Coordinador[5]
+    frame_alerts[11]= Coordinador[6]
+    frame_alerts[12]= Coordinador[7] #END_MAC
     frame_alerts[13]= 0xFF #address
     frame_alerts[14]= 0xFE
     frame_alerts[15]= 0x00 #broadcast
@@ -907,7 +907,7 @@ def send_historicals(Max_temp, Max_Hum, Max_pressure, Max_ligth, Max_rain, Max_S
 Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
 Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
 Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
-wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes , bateria, panel ):
+wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes , bateria, panel, Coordinador ):
     
     try:
         #voltage
@@ -967,10 +967,10 @@ wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wi
         frame_historicals[6] = 0x13
         frame_historicals[7] = 0xA2
         frame_historicals[8] = 0x00
-        frame_historicals[9] = 0x41
-        frame_historicals[10]= 0xEA
-        frame_historicals[11]= 0x56
-        frame_historicals[12]= 0x61 #END_MAC
+        frame_historicals[9] = Coordinador[4]
+        frame_historicals[10]= Coordinador[5]
+        frame_historicals[11]= Coordinador[6]
+        frame_historicals[12]= Coordinador[7] #END_MAC
         frame_historicals[13]= 0xFF #address
         frame_historicals[14]= 0xFE
         frame_historicals[15]= 0x00 #broadcast
@@ -1095,7 +1095,7 @@ wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wi
     except Exception as e:
         print(f"An exception occurred while get bytes date: {e}")
 
-def Send_Sensors_GPS(tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes):
+def Send_Sensors_GPS(tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes, Coordinador):
     
     frame[0] = 0x7E #Start
     frame[1] = 0x00 #length
@@ -1106,10 +1106,10 @@ def Send_Sensors_GPS(tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, 
     frame[6] = 0x13
     frame[7] = 0xA2
     frame[8] = 0x00
-    frame[9] = 0x41
-    frame[10]= 0xEA
-    frame[11]= 0x56
-    frame[12]= 0x61 #END_MAC
+    frame[9] = Coordinador[4]
+    frame[10]= Coordinador[5]
+    frame[11]= Coordinador[6]
+    frame[12]= Coordinador[7] #END_MAC
     frame[13]= 0xFF #address
     frame[14]= 0xFE
     frame[15]= 0x00 #broadcast
@@ -1318,6 +1318,7 @@ while True:
         data = Data_received(Coordinador, Sensors_on)
         
         print("this data ",data)
+        data = "send"
         if consular_mac == True:
             Coordinador = get_mac()
             consular_mac = False
@@ -1549,7 +1550,7 @@ while True:
                     
                     if data == "send":
                         if Gps_active == False : #time config 0x50 = 80
-                            Send_Sensors_GPS(tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes)
+                            Send_Sensors_GPS(tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes, Coordinador)
                         #send data
                         if Gps_active == True:
                             enviar = True
@@ -1653,7 +1654,7 @@ while True:
                             Min_temp, Min_Hum, Min_pressure, Min_ligth, Min_rain, Min_Speed,
                             Time_Max_temp,Time_Max_Hum,Time_Max_pressure,Time_Max_ligth,Time_Max_rain,Time_Max_Speed,
                             Time_Min_temp,Time_Min_Hum,Time_Min_pressure,Time_Min_ligth,Time_Min_rain,Time_Min_Speed,
-                            wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes, bateria , panel)                 
+                            wind_direction,tempCBytes, tempFBytes, humBytes, lumBytes, pressureBytes, dir_wind_Bytes, Speed_bytes, altBytes, rain_bytes, bateria , panel, Coordinador)                 
                     
                     #calculate historical wind direction
                     predominant_directions_count[dir_wind] += 1
@@ -1685,41 +1686,41 @@ while True:
                         print("set points activos __________-----------")
                         
                         if (temperature < temperatura_min_) and temperature_alert_m == True:
-                            send_alerts(tempCBytes, timeUTC , "temperaturem")
+                            send_alerts(tempCBytes, timeUTC , "temperaturem", Coordinador)
                             temperature_alert_m = False
                         if (temperature > temperatura_max_) and temperature_alert_M == True:
                             temperature_alert_M = False
-                            send_alerts(tempCBytes, timeUTC , "temperatureM")
+                            send_alerts(tempCBytes, timeUTC , "temperatureM",Coordinador)
                         if (lum < ligth_min) and ligth_Alert_m == True:
-                             send_alerts(lumBytes, timeUTC , "ligthm")
+                             send_alerts(lumBytes, timeUTC , "ligthm",Coordinador)
                              ligth_Alert_m = False
                         if (lum > ligth_max_) and ligth_Alert_M == True:
                             ligth_Alert_M = False
-                            send_alerts(lumBytes, timeUTC , "ligthM")
+                            send_alerts(lumBytes, timeUTC , "ligthM",Coordinador)
                         if (humidity < humedad_min_)  and humity_Alert_m == True:
-                            send_alerts(humBytes, timeUTC , "humitym")
+                            send_alerts(humBytes, timeUTC , "humitym",Coordinador)
                             humity_Alert_m = False
                         if (humidity > humedad_max_) and humity_Alert_M == True:
-                            send_alerts(humBytes, timeUTC , "humityM")
+                            send_alerts(humBytes, timeUTC , "humityM",Coordinador)
                             humity_Alert_M = False
                         if (pressure < pressure_min_) and pressure_Alert_m == True:
-                            send_alerts(pressureBytes, timeUTC , "pressurem")
+                            send_alerts(pressureBytes, timeUTC , "pressurem",Coordinador)
                             pressure_Alert_m = False
                         if (pressure > pressure_max_) and pressure_Alert_M == True:
-                            send_alerts(pressureBytes, timeUTC , "pressureM")
+                            send_alerts(pressureBytes, timeUTC , "pressureM",Coordinador)
                             pressure_Alert_M = False
                         if (rain_data < rain_min_ ) and rain_Alert_m == True:
-                            send_alerts(rain_bytes, timeUTC , "rainm")
+                            send_alerts(rain_bytes, timeUTC , "rainm",Coordinador)
                             rain_Alert_m = False
                         if(rain_data > rain_max_) and rain_Alert_M == True:
-                            send_alerts(rain_bytes, timeUTC , "rainM")
+                            send_alerts(rain_bytes, timeUTC , "rainM",Coordinador)
                             rain_Alert_M = False
                         print(f"mi speed es {SpeedReal_}")
                         if (SpeedReal_ < speed_wind_min_ ) and speed_Alert_m == True:
-                            send_alerts(Speed_bytes, timeUTC , "speedm")
+                            send_alerts(Speed_bytes, timeUTC , "speedm",Coordinador)
                             speed_Alert_m = False
                         if(SpeedReal_ > speed_wind_max_) and speed_Alert_M == True:
-                            send_alerts(Speed_bytes, timeUTC , "speedM")
+                            send_alerts(Speed_bytes, timeUTC , "speedM",Coordinador)
                             speed_Alert_M = False
                             print("lluvia fuera de limites")
                              
